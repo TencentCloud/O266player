@@ -10,7 +10,7 @@ info()
 
 ARCH="x86_64"
 MINIMAL_OSX_VERSION="10.7"
-OSX_VERSION=`xcrun --show-sdk-version`
+OSX_VERSION=`xcrun --show-sdk-version | cut -c1-5`
 OSX_KERNELVERSION=`uname -r | cut -d. -f1`
 SDKROOT=`xcode-select -print-path`/Platforms/MacOSX.platform/Developer/SDKs/MacOSX$OSX_VERSION.sdk
 VLCBUILDDIR=""
