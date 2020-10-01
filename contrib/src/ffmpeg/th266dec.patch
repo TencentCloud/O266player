@@ -1,0 +1,1743 @@
+diff --git a/configure b/configure
+index 20c55657ad..693b2c6569 100755
+--- a/configure
++++ b/configure
+@@ -258,6 +258,7 @@ External library support:
+   --enable-libspeex        enable Speex de/encoding via libspeex [no]
+   --enable-libssh          enable SFTP protocol via libssh [no]
+   --enable-libtesseract    enable Tesseract, needed for ocr filter [no]
++  --enable-libth266dec     enable VVC decoding via libth266dec [no]
+   --enable-libtheora       enable Theora encoding via libtheora [no]
+   --enable-libtwolame      enable MP2 encoding via libtwolame [no]
+   --enable-libv4l2         enable libv4l2/v4l-utils [no]
+@@ -1623,6 +1624,7 @@ EXTERNAL_LIBRARY_LIST="
+     libspeex
+     libssh
+     libtesseract
++    libth266dec
+     libtheora
+     libtwolame
+     libv4l2
+@@ -2963,6 +2965,7 @@ libshine_encoder_select="audio_frame_queue"
+ libspeex_decoder_deps="libspeex"
+ libspeex_encoder_deps="libspeex"
+ libspeex_encoder_select="audio_frame_queue"
++libth266_decoder_deps="libth266dec"
+ libtheora_encoder_deps="libtheora"
+ libtwolame_encoder_deps="libtwolame"
+ libvo_amrwbenc_encoder_deps="libvo_amrwbenc"
+@@ -5893,6 +5896,7 @@ enabled libsoxr           && require libsoxr soxr.h soxr_create -lsoxr
+ enabled libssh            && require_pkg_config libssh libssh libssh/sftp.h sftp_init
+ enabled libspeex          && require_pkg_config libspeex speex speex/speex.h speex_decoder_init
+ enabled libtesseract      && require_pkg_config libtesseract tesseract tesseract/capi.h TessBaseAPICreate
++enabled libth266dec       && require_pkg_config libth266dec "th266dec >= 0.1.0" th266dec_api.h TH266DecCreateDecoder $libm_extralibs $pthreads_extralibs
+ enabled libtheora         && require libtheora theora/theoraenc.h th_info_init -ltheoraenc -ltheoradec -logg
+ enabled libtwolame        && require libtwolame twolame.h twolame_init -ltwolame &&
+                              { check_lib libtwolame twolame.h twolame_encode_buffer_float32_interleaved -ltwolame ||
+diff --git a/libavcodec/Makefile b/libavcodec/Makefile
+index ca72138c02..8ffea8f755 100644
+--- a/libavcodec/Makefile
++++ b/libavcodec/Makefile
+@@ -951,6 +951,7 @@ OBJS-$(CONFIG_LIBOPUS_ENCODER)            += libopusenc.o libopus.o     \
+ OBJS-$(CONFIG_LIBSHINE_ENCODER)           += libshine.o
+ OBJS-$(CONFIG_LIBSPEEX_DECODER)           += libspeexdec.o
+ OBJS-$(CONFIG_LIBSPEEX_ENCODER)           += libspeexenc.o
++OBJS-$(CONFIG_LIBTH266_DECODER)           += libth266dec.o
+ OBJS-$(CONFIG_LIBTHEORA_ENCODER)          += libtheoraenc.o
+ OBJS-$(CONFIG_LIBTWOLAME_ENCODER)         += libtwolame.o
+ OBJS-$(CONFIG_LIBVO_AMRWBENC_ENCODER)     += libvo-amrwbenc.o
+@@ -1017,6 +1018,7 @@ OBJS-$(CONFIG_VC1_PARSER)              += vc1_parser.o vc1.o vc1data.o  \
+ OBJS-$(CONFIG_VP3_PARSER)              += vp3_parser.o
+ OBJS-$(CONFIG_VP8_PARSER)              += vp8_parser.o
+ OBJS-$(CONFIG_VP9_PARSER)              += vp9_parser.o
++OBJS-$(CONFIG_VVC_PARSER)              += vvc_parser.o vvc_ps.o
+ OBJS-$(CONFIG_XMA_PARSER)              += xma_parser.o
+ 
+ # bitstream filters
+diff --git a/libavcodec/allcodecs.c b/libavcodec/allcodecs.c
+index ed1e7ab06e..0d317e3888 100644
+--- a/libavcodec/allcodecs.c
++++ b/libavcodec/allcodecs.c
+@@ -598,6 +598,7 @@ static void register_all(void)
+     REGISTER_ENCODER(HEVC_VAAPI,        hevc_vaapi);
+     REGISTER_ENCODER(HEVC_VIDEOTOOLBOX, hevc_videotoolbox);
+     REGISTER_ENCODER(LIBKVAZAAR,        libkvazaar);
++    REGISTER_DECODER(LIBTH266,          libth266);
+     REGISTER_DECODER(MJPEG_CUVID,       mjpeg_cuvid);
+     REGISTER_ENCODER(MJPEG_QSV,         mjpeg_qsv);
+     REGISTER_ENCODER(MJPEG_VAAPI,       mjpeg_vaapi);
+@@ -658,6 +659,7 @@ static void register_all(void)
+     REGISTER_PARSER(VP3,                vp3);
+     REGISTER_PARSER(VP8,                vp8);
+     REGISTER_PARSER(VP9,                vp9);
++    REGISTER_PARSER(VVC,                vvc);
+     REGISTER_PARSER(XMA,                xma);
+ }
+ 
+diff --git a/libavcodec/avcodec.h b/libavcodec/avcodec.h
+index 5db6a81320..3a24951c13 100644
+--- a/libavcodec/avcodec.h
++++ b/libavcodec/avcodec.h
+@@ -409,6 +409,8 @@ enum AVCodecID {
+     AV_CODEC_ID_DXV,
+     AV_CODEC_ID_SCREENPRESSO,
+     AV_CODEC_ID_RSCC,
++    AV_CODEC_ID_VVC,
++#define AV_CODEC_ID_H266 AV_CODEC_ID_VVC
+ 
+     AV_CODEC_ID_Y41P = 0x8000,
+     AV_CODEC_ID_AVRP,
+@@ -2903,6 +2905,13 @@ typedef struct AVCodecContext {
+ #define FF_PROFILE_HEVC_MAIN_STILL_PICTURE          3
+ #define FF_PROFILE_HEVC_REXT                        4
+ 
++#define FF_PROFILE_VVC_MAIN_10                      1
++#define FF_PROFILE_VVC_MAIN_10_STILL_PICTURE        65
++#define FF_PROFILE_VVC_MAIN_10_444                  33
++#define FF_PROFILE_VVC_MAIN_10_444_STILL_PICTURE    97
++#define FF_PROFILE_VVC_MULTILAYER_MAIN_10           17
++#define FF_PROFILE_VVC_MULTILAYER_MAIN_10_444       49
++
+     /**
+      * level
+      * - encoding: Set by user.
+diff --git a/libavcodec/codec_desc.c b/libavcodec/codec_desc.c
+index c3688de1d6..183f722e99 100644
+--- a/libavcodec/codec_desc.c
++++ b/libavcodec/codec_desc.c
+@@ -1296,6 +1296,14 @@ static const AVCodecDescriptor codec_descriptors[] = {
+         .long_name = NULL_IF_CONFIG_SMALL("NewTek SpeedHQ"),
+         .props     = AV_CODEC_PROP_INTRA_ONLY | AV_CODEC_PROP_LOSSY,
+     },
++    {
++        .id        = AV_CODEC_ID_VVC,
++        .type      = AVMEDIA_TYPE_VIDEO,
++        .name      = "vvc",
++        .long_name = NULL_IF_CONFIG_SMALL("H.266 / VVC (Versatile Video Coding)"),
++        .props     = AV_CODEC_PROP_LOSSY | AV_CODEC_PROP_REORDER,
++        .profiles  = NULL_IF_CONFIG_SMALL(ff_vvc_profiles),
++    },
+     {
+         .id        = AV_CODEC_ID_WRAPPED_AVFRAME,
+         .type      = AVMEDIA_TYPE_VIDEO,
+diff --git a/libavcodec/h2645_parse.c b/libavcodec/h2645_parse.c
+index e6c40381b0..5d10ebcd85 100644
+--- a/libavcodec/h2645_parse.c
++++ b/libavcodec/h2645_parse.c
+@@ -145,6 +145,47 @@ nsc:
+     return si;
+ }
+ 
++static const char *vvc_nal_type_name[32] = {
++    "TRAIL_NUT", // VVC_NAL_TRAIL_NUT
++    "STSA_NUT", // VVC_NAL_STSA_NUT
++    "RADL_NUT", // VVC_NAL_RADL_NUT
++    "RASL_NUT", // VVC_NAL_RASL_NUT
++    "RSV_VCL_4", // VVC_NAL_RSV_VCL_4
++    "RSV_VCL_5", // VVC_NAL_RSV_VCL_5
++    "RSV_VCL_6", // VVC_NAL_RSV_VCL_6
++    "IDR_W_RADL", // VVC_NAL_IDR_W_RADL
++    "IDR_N_LP", // VVC_NAL_IDR_N_LP
++    "CRA_NUT", // VVC_NAL_CRA_NUT
++    "GDR_NUT", // VVC_NAL_GDR_NUT
++    "RSV_IRAP_11", // VVC_NAL_RSV_IRAP_11
++    "OPI_NUT", // VVC_NAL_OPI
++    "DCI_NUT", // VVC_NAL_DCI
++    "VPS_NUT", // VVC_NAL_VPS
++    "SPS_NUT", // VVC_NAL_SPS
++    "PPS_NUT", // VVC_NAL_PPS
++    "PREFIX_APS_NUT", // VVC_NAL_APS_PREFIX
++    "SUFFIX_APS_NUT", // VVC_NAL_APS_SUFFIX
++    "PH_NUT", // VVC_NAL_PH_NUT
++    "AUD_NUT", // VVC_NAL_AUD
++    "EOS_NUT", // VVC_NAL_EOS_NUT
++    "EOB_NUT", // VVC_NAL_EOB_NUT
++    "PREFIX_SEI_NUT", // VVC_NAL_SEI_PREFIX
++    "SUFFIX_SEI_NUT", // VVC_NAL_SEI_SUFFIX
++    "FD_NUT", // VVC_NAL_FD_NUT
++    "RSV_NVCL_26", // VVC_NAL_RSV_VCL_26
++    "RSV_NVCL_27", // VVC_NAL_RSV_VCL_27
++    "UNSPEC_28", // VVC_NAL_UNSPEC_28
++    "UNSPEC_29", // VVC_NAL_UNSPEC_29
++    "UNSPEC_30", // VVC_NAL_UNSPEC_30
++    "UNSPEC_31", // VVC_NAL_UNSPEC_31
++};
++
++static const char *vvc_nal_unit_name(int nal_type)
++{
++    av_assert0(nal_type >= 0 && nal_type < 32);
++    return vvc_nal_type_name[nal_type];
++}
++
+ static const char *nal_unit_name(int nal_type)
+ {
+     switch(nal_type) {
+@@ -206,6 +247,27 @@ static int get_bit_length(H2645NAL *nal, int skip_trailing_zeros)
+  * @return AVERROR_INVALIDDATA if the packet is not a valid NAL unit,
+  * 0 if the unit should be skipped, 1 otherwise
+  */
++static int vvc_parse_nal_header(H2645NAL *nal, void *logctx) {
++    GetBitContext *gb = &nal->gb;
++    int nuh_layer_id;
++
++    if (get_bits1(gb) != 0)
++        return AVERROR_INVALIDDATA;
++
++    skip_bits1(gb);
++    nuh_layer_id = get_bits(gb, 6);
++    nal->type = get_bits(gb, 5);
++    nal->temporal_id = get_bits(gb, 3) - 1;
++    if (nal->temporal_id < 0)
++        return AVERROR_INVALIDDATA;
++
++    av_log(logctx, AV_LOG_DEBUG,
++           "nal_unit_type: %d(%s), nuh_layer_id: %d, temporal_id: %d\n",
++           nal->type, vvc_nal_unit_name(nal->type), nuh_layer_id, nal->temporal_id);
++
++    return nuh_layer_id == 0;
++}
++
+ static int hevc_parse_nal_header(H2645NAL *nal, void *logctx)
+ {
+     GetBitContext *gb = &nal->gb;
+@@ -367,10 +429,17 @@ int ff_h2645_packet_split(H2645Packet *pkt, const uint8_t *buf, int length,
+         if (ret < 0)
+             return ret;
+ 
+-        if (codec_id == AV_CODEC_ID_HEVC)
++        switch (codec_id) {
++        case AV_CODEC_ID_VVC:
++            ret = vvc_parse_nal_header(nal, logctx);
++            break;
++        case AV_CODEC_ID_HEVC:
+             ret = hevc_parse_nal_header(nal, logctx);
+-        else
++            break;
++        default:
+             ret = h264_parse_nal_header(nal, logctx);
++            break;
++        }
+         if (ret <= 0 || nal->size <= 0) {
+             if (ret < 0) {
+                 av_log(logctx, AV_LOG_ERROR, "Invalid NAL unit %d, skipping.\n",
+diff --git a/libavcodec/libth266dec.c b/libavcodec/libth266dec.c
+new file mode 100644
+index 0000000000..2dc1059a87
+--- /dev/null
++++ b/libavcodec/libth266dec.c
+@@ -0,0 +1,207 @@
++/*
++ * Tencent VVC decoder library plugin
++ *
++ * Copyright (c) 2020 Tencent
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++
++#include <th266dec_api.h>
++
++#include "avcodec.h"
++#include "internal.h"
++#include "libavutil/imgutils.h"
++#include "libavutil/intreadwrite.h"
++#include "libavutil/opt.h"
++#include "profiles.h"
++
++#define OFFSET(x) offsetof(TH266DecContext, x)
++#define VD AV_OPT_FLAG_VIDEO_PARAM | AV_OPT_FLAG_DECODING_PARAM
++
++typedef struct TH266DecContext {
++    AVClass *class;
++    TH266DecConfig config;
++    TH266DecDecoderHandle handle;
++    bool eos;
++} TH266DecContext;
++
++static av_cold int th266dec_init(AVCodecContext *avctx)
++{
++    TH266DecContext *ctx = avctx->priv_data;
++    memset(&ctx->config, 0, sizeof(TH266DecConfig));
++    ctx->config.num_threads = FFMIN(avctx->thread_count ? avctx->thread_count : av_cpu_count(), 64);
++    if (ctx->config.num_threads > 0) {
++        ctx->config.enable_multi_thread = 1;
++    }
++    ctx->eos = false;
++    if (kTH266DecOk != TH266DecCreateDecoder(&ctx->config, &ctx->handle)) {
++        av_log(avctx, AV_LOG_ERROR, "Failed to initialize decoder\n");
++        return AVERROR(EINVAL);
++    }
++
++    return 0;
++}
++
++static int th266dec_decode(AVCodecContext *avctx, void *data, int *got_frame, AVPacket *avpkt) {
++    TH266DecContext *ctx = avctx->priv_data;
++    AVFrame *picture = data;
++    TH266DecStatus status = kTH266DecOk;
++    TH266DecOutputPicture pic;
++    uint8_t *planes[3];
++    int linesizes[3];
++    int ret;
++    *got_frame = 0;
++
++    if (!avpkt->data) {
++        if (!ctx->eos) {
++            TH266DecNotifyEndOfStream(ctx->handle);
++            status = TH266DecDecodeFrame(ctx->handle);
++            if (status != kTH266DecEndOfStream) {
++                av_log(avctx, AV_LOG_ERROR, "Failed to flush decoder, status %d\n", status);
++                return AVERROR(EINVAL);
++            }
++            ctx->eos = true;
++        }
++    } else {
++        TH266DecDataPacket packet;
++        packet.has_complete_nal = true;
++        packet.data_buf = avpkt->data;
++        packet.data_size = avpkt->size;
++        status = TH266DecPushData(ctx->handle, &packet);
++        if (status != kTH266DecOk) {
++            av_log(avctx, AV_LOG_ERROR, "Failed to push data\n");
++            return AVERROR(EINVAL);
++        }
++        status = TH266DecDecodeFrame(ctx->handle);
++        if (status != kTH266DecOk) {
++            if (status == kTH266DecNeedMoreData) {
++                return AVERROR(EAGAIN);
++            }
++            av_log(avctx, AV_LOG_ERROR, "Failed to decode data, status %d\n", status);
++            return AVERROR(EINVAL);
++        }
++    }
++
++    status = TH266DecGetOutputPicture(ctx->handle, &pic);
++    if (status == kTH266DecOk) {
++        switch (pic.header.chroma_format) {
++        case kTH266DecChromaFormat400:
++            avctx->pix_fmt = pic.planes[0].bit_depth == 8 ? AV_PIX_FMT_GRAY8 : AV_PIX_FMT_GRAY10;
++            break;
++        case kTH266DecChromaFormat420:
++            avctx->pix_fmt = pic.planes[0].bit_depth == 8 ? AV_PIX_FMT_YUV420P : AV_PIX_FMT_YUV420P10;
++            break;
++        case kTH266DecChromaFormat422:
++            avctx->pix_fmt = pic.planes[0].bit_depth == 8 ? AV_PIX_FMT_YUV422P : AV_PIX_FMT_YUV422P10;
++            break;
++        case kTH266DecChromaFormat444:
++            avctx->pix_fmt = pic.planes[0].bit_depth == 8 ? AV_PIX_FMT_YUV444P : AV_PIX_FMT_YUV444P10;
++            break;
++        default:
++            av_log(avctx, AV_LOG_ERROR, "Unsupported color format %d\n", pic.header.chroma_format);
++            return AVERROR_INVALIDDATA;
++        }
++        if ((int) pic.header.width != avctx->width || (int) pic.header.height != avctx->height) {
++            av_log(avctx, AV_LOG_INFO, "dimension change! %dx%d -> %dx%d\n",
++                   avctx->width, avctx->height, pic.header.width, pic.header.height);
++            ret = ff_set_dimensions(avctx, pic.header.width, pic.header.height);
++            if (ret < 0)
++                return ret;
++        }
++
++        if ((ret = ff_get_buffer(avctx, picture, 0)) < 0) {
++            av_log(avctx, AV_LOG_ERROR, "Get buffer from ffmpeg failed\n");
++            return ret;
++        }
++
++        planes[0] = (uint8_t *)pic.planes[0].pix;
++        planes[1] = (uint8_t *)pic.planes[1].pix;
++        planes[2] = (uint8_t *)pic.planes[2].pix;
++        linesizes[0] = (int)pic.planes[0].stride;
++        linesizes[1] = (int)pic.planes[1].stride;
++        linesizes[2] = (int)pic.planes[2].stride;
++#if TH266DEC_FIX_8BIT_OUTPUT
++        if (pic.planes[0].bit_depth == 8) {
++            int width = pic.header.width;
++            int height = pic.header.height;
++            const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(avctx->pix_fmt);
++            for (int i = 0; i < desc->nb_components; i++) {
++                if (i == 1) {
++                    width = AV_CEIL_RSHIFT(width, desc->log2_chroma_w);
++                    height = AV_CEIL_RSHIFT(height, desc->log2_chroma_h);
++                }
++                const uint8_t *src = planes[i];
++                uint8_t *dst = picture->data[i];
++                for (int y = 0; y < height; y++) {
++                    for (int x = 0; x < width; x++) {
++                        dst[x] = src[x * 2];
++                    }
++                    src += linesizes[i];
++                    dst += picture->linesize[i];
++                }
++            }
++        } else
++#endif
++        av_image_copy(picture->data, picture->linesize, (const uint8_t **)planes, linesizes, avctx->pix_fmt, avctx->width, avctx->height);
++        TH266DecReleaseOutputPicture(ctx->handle, &pic);
++        *got_frame = 1;
++    }
++    return avpkt->size;
++}
++
++static av_cold int th266dec_free(AVCodecContext *avctx)
++{
++    TH266DecContext *ctx = avctx->priv_data;
++    if (ctx && ctx->handle) {
++        TH266DecCloseDecoder(ctx->handle);
++        ctx->handle = NULL;
++    }
++    return 0;
++}
++
++static const AVOption th266_options[] = {
++    {NULL}
++};
++
++static const AVClass class_th266 = {
++    .class_name = "libth266dec decoder",
++    .item_name = av_default_item_name,
++    .option = th266_options,
++    .version = LIBAVUTIL_VERSION_INT,
++};
++
++AVCodec ff_libth266_decoder = {
++    .name = "libth266dec",
++    .long_name = NULL_IF_CONFIG_SMALL("Tencent VVC decoder"),
++    .type = AVMEDIA_TYPE_VIDEO,
++    .id = AV_CODEC_ID_VVC,
++    .priv_data_size = sizeof(TH266DecContext),
++    .priv_class = &class_th266,
++    .init = th266dec_init,
++    .close = th266dec_free,
++    .decode = th266dec_decode,
++    .capabilities = AV_CODEC_CAP_AUTO_THREADS | AV_CODEC_CAP_DR1 | AV_CODEC_CAP_DELAY,
++    .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_INIT_CLEANUP,
++    .profiles = NULL_IF_CONFIG_SMALL(ff_vvc_profiles),
++    .pix_fmts = (const enum AVPixelFormat[]){AV_PIX_FMT_GRAY8,
++                                             AV_PIX_FMT_YUV420P,
++                                             AV_PIX_FMT_YUV422P,
++                                             AV_PIX_FMT_YUV444P,
++                                             AV_PIX_FMT_GRAY10,
++                                             AV_PIX_FMT_YUV420P10,
++                                             AV_PIX_FMT_YUV422P10,
++                                             AV_PIX_FMT_YUV444P10,
++                                             AV_PIX_FMT_NONE},
++};
+diff --git a/libavcodec/profiles.c b/libavcodec/profiles.c
+index 30498efedf..374bfcd9f7 100644
+--- a/libavcodec/profiles.c
++++ b/libavcodec/profiles.c
+@@ -83,6 +83,16 @@ const AVProfile ff_hevc_profiles[] = {
+     { FF_PROFILE_UNKNOWN },
+ };
+ 
++const AVProfile ff_vvc_profiles[] = {
++    { FF_PROFILE_VVC_MAIN_10,                   "Main 10"                     },
++    { FF_PROFILE_VVC_MAIN_10_STILL_PICTURE,     "Main 10 Still Picture"       },
++    { FF_PROFILE_VVC_MAIN_10_444,               "Main 10 4:4:4"               },
++    { FF_PROFILE_VVC_MAIN_10_444_STILL_PICTURE, "Main 10 4:4:4 Still Picture" },
++    { FF_PROFILE_VVC_MULTILAYER_MAIN_10,        "Multilayer Main 10"          },
++    { FF_PROFILE_VVC_MULTILAYER_MAIN_10_444,    "Multilayer Main 10 4:4:4"    },
++    { FF_PROFILE_UNKNOWN },
++};
++
+ const AVProfile ff_jpeg2000_profiles[] = {
+     { FF_PROFILE_JPEG2000_CSTREAM_RESTRICTION_0,  "JPEG 2000 codestream restriction 0"   },
+     { FF_PROFILE_JPEG2000_CSTREAM_RESTRICTION_1,  "JPEG 2000 codestream restriction 1"   },
+diff --git a/libavcodec/profiles.h b/libavcodec/profiles.h
+index eb18b406af..ae11af425e 100644
+--- a/libavcodec/profiles.h
++++ b/libavcodec/profiles.h
+@@ -26,6 +26,7 @@ extern const AVProfile ff_dca_profiles[];
+ extern const AVProfile ff_dnxhd_profiles[];
+ extern const AVProfile ff_h264_profiles[];
+ extern const AVProfile ff_hevc_profiles[];
++extern const AVProfile ff_vvc_profiles[];
+ extern const AVProfile ff_jpeg2000_profiles[];
+ extern const AVProfile ff_mpeg2_video_profiles[];
+ extern const AVProfile ff_mpeg4_video_profiles[];
+diff --git a/libavcodec/vvc.h b/libavcodec/vvc.h
+new file mode 100644
+index 0000000000..9d48b62c42
+--- /dev/null
++++ b/libavcodec/vvc.h
+@@ -0,0 +1,72 @@
++/*
++ * VVC shared code
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++
++#ifndef AVCODEC_VVC_H
++#define AVCODEC_VVC_H
++
++/**
++ * Table 5 – NAL unit type codes and NAL unit type classes in
++ * T-REC-H.266
++ */
++enum VVCNALUnitType {
++    VVC_NAL_TRAIL_NUT      = 0,
++    VVC_NAL_STSA_NUT       = 1,
++    VVC_NAL_RADL_NUT       = 2,
++    VVC_NAL_RASL_NUT       = 3,
++    VVC_NAL_RSV_VCL_4      = 4,
++    VVC_NAL_RSV_VCL_5      = 5,
++    VVC_NAL_RSV_VCL_6      = 6,
++    VVC_NAL_IDR_W_RADL     = 7,
++    VVC_NAL_IDR_N_LP       = 8,
++    VVC_NAL_CRA_NUT        = 9,
++    VVC_NAL_GDR_NUT        = 10,
++    VVC_NAL_RSV_IRAP_11    = 11,
++    VVC_NAL_OPI            = 12,
++    VVC_NAL_DCI            = 13,
++    VVC_NAL_VPS            = 14,
++    VVC_NAL_SPS            = 15,
++    VVC_NAL_PPS            = 16,
++    VVC_NAL_APS_PREFIX     = 17,
++    VVC_NAL_APS_SUFFIX     = 18,
++    VVC_NAL_PH             = 19,
++    VVC_NAL_AUD            = 20,
++    VVC_NAL_EOS_NUT        = 21,
++    VVC_NAL_EOB_NUT        = 22,
++    VVC_NAL_SEI_PREFIX     = 23,
++    VVC_NAL_SEI_SUFFIX     = 24,
++    VVC_NAL_FD_NUT         = 25,
++    VVC_NAL_RSV_VCL_26     = 26,
++    VVC_NAL_RSV_VCL_27     = 27,
++    VVC_NAL_UNSPEC_28      = 28,
++    VVC_NAL_UNSPEC_29      = 29,
++    VVC_NAL_UNSPEC_30      = 30,
++    VVC_NAL_UNSPEC_31      = 31,
++};
++
++enum {
++    // 7.4.3.3: vps_max_sub_layers_minus1 is in [0, 6].
++    VVC_MAX_SUB_LAYERS = 7,
++    // 7.4.3.4: sps_seq_parameter_set_id is u(4).
++    VVC_MAX_SPS_COUNT = 16,
++    // 7.4.3.5: pps_pic_parameter_set_id is u(6).
++    VVC_MAX_PPS_COUNT = 64,
++};
++
++#endif /* AVCODEC_VVC_H */
+diff --git a/libavcodec/vvc_parser.c b/libavcodec/vvc_parser.c
+new file mode 100644
+index 0000000000..f2e71e8981
+--- /dev/null
++++ b/libavcodec/vvc_parser.c
+@@ -0,0 +1,314 @@
++/*
++ * VVC Annex B format parser
++ *
++ * Copyright (C) 2020 Tencent
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++
++#include "libavutil/common.h"
++
++#include "golomb.h"
++#include "vvc_ps.h"
++#include "h2645_parse.h"
++#include "internal.h"
++#include "parser.h"
++
++#define START_CODE 0x000001 ///< start_code_prefix_one_3bytes
++
++typedef struct VVCParserContext {
++    ParseContext pc;
++
++    H2645Packet pkt;
++    VVCParamSets ps;
++
++    unsigned int pps_id;
++
++    int is_avc;
++    int nal_length_size;
++    int parsed_extradata;
++} VVCParserContext;
++
++static int vvc_parse_picture_header(AVCodecParserContext *s, H2645NAL *nal,
++                                    AVCodecContext *avctx)
++{
++    VVCParserContext *ctx = s->priv_data;
++    GetBitContext *gb = &nal->gb;
++
++    const int gdr_or_irap_pic_flag = get_bits1(gb);
++    skip_bits1(gb); // ph_non_ref_pic_flag
++    if (gdr_or_irap_pic_flag)
++        skip_bits1(gb); // ph_gdr_pic_flag
++    const int inter_slice_allowed_flag = get_bits1(gb);
++    if (inter_slice_allowed_flag)
++        skip_bits1(gb); // ph_intra_slice_allowed_flag
++
++    ctx->pps_id = get_ue_golomb_long(gb);
++
++    // TODO: parse remaining syntax
++
++    return 0;
++}
++
++static int vvc_parse_slice_header(AVCodecParserContext *s, H2645NAL *nal,
++                                  AVCodecContext *avctx)
++{
++    VVCParserContext *ctx = s->priv_data;
++    VVCParamSets *ps = &ctx->ps;
++    const VVCSPS *sps;
++    GetBitContext *gb = &nal->gb;
++    const VVCWindow *ow;
++    int ret;
++
++    unsigned int pps_id, picture_header_in_slice_header_flag;
++
++    picture_header_in_slice_header_flag = get_bits1(gb);
++    if (picture_header_in_slice_header_flag)
++        if ((ret = vvc_parse_picture_header(s, nal, avctx) < 0))
++            return ret;
++
++    pps_id = ctx->pps_id;
++    if (pps_id >= VVC_MAX_PPS_COUNT || !ps->pps_list[pps_id]) {
++        av_log(avctx, AV_LOG_ERROR, "PPS id out of range: %d\n", pps_id);
++        return AVERROR_INVALIDDATA;
++    }
++    ps->pps = (VVCPPS*)ps->pps_list[pps_id]->data;
++
++    if (ps->pps->sps_id >= VVC_MAX_SPS_COUNT || !ps->sps_list[ps->pps->sps_id]) {
++        av_log(avctx, AV_LOG_ERROR, "SPS id out of range: %d\n", ps->pps->sps_id);
++        return AVERROR_INVALIDDATA;
++    }
++    if (ps->sps != (VVCSPS*)ps->sps_list[ps->pps->sps_id]->data) {
++        ps->sps = (VVCSPS*)ps->sps_list[ps->pps->sps_id]->data;
++        // ps->vps = (VVCVPS*)ps->vps_list[ps->sps->vps_id]->data;
++    }
++
++    sps = ps->sps;
++    ow  = &sps->output_window;
++
++    s->coded_width  = sps->width;
++    s->coded_height = sps->height;
++    s->width        = sps->width  - ow->left_offset - ow->right_offset;
++    s->height       = sps->height - ow->top_offset  - ow->bottom_offset;
++    s->format       = sps->pix_fmt;
++
++    avctx->pix_fmt      = sps->pix_fmt;
++    avctx->coded_width  = sps->width;
++    avctx->coded_height = sps->height;
++    avctx->width        = sps->width  - ow->left_offset - ow->right_offset;
++    avctx->height       = sps->height - ow->top_offset  - ow->bottom_offset;
++    avctx->profile      = sps->ptl.general_profile_idc;
++    avctx->level        = sps->ptl.general_level_idc;
++
++    // TODO: parse remaining syntax
++
++    return 1; /* no need to evaluate the rest */
++}
++
++/**
++ * Parse NAL units of found picture and decode some basic information.
++ *
++ * @param s parser context.
++ * @param avctx codec context.
++ * @param buf buffer with field/frame data.
++ * @param buf_size size of the buffer.
++ */
++static int parse_nal_units(AVCodecParserContext *s, const uint8_t *buf,
++                           int buf_size, AVCodecContext *avctx)
++{
++    VVCParserContext *ctx = s->priv_data;
++    VVCParamSets *ps = &ctx->ps;
++    int ret, i;
++
++    /* set some sane default values */
++    s->pict_type         = AV_PICTURE_TYPE_I;
++    s->key_frame         = 0;
++    s->picture_structure = AV_PICTURE_STRUCTURE_UNKNOWN;
++
++    ret = ff_h2645_packet_split(&ctx->pkt, buf, buf_size, avctx, ctx->is_avc,
++                                ctx->nal_length_size, AV_CODEC_ID_VVC, 1);
++    if (ret < 0)
++        return ret;
++
++    for (i = 0; i < ctx->pkt.nb_nals; i++) {
++        H2645NAL *nal = &ctx->pkt.nals[i];
++        GetBitContext *gb = &nal->gb;
++
++        switch (nal->type) {
++        case VVC_NAL_SPS:
++            ff_vvc_decode_nal_sps(gb, avctx, ps, 1);
++            break;
++        case VVC_NAL_PPS:
++            ff_vvc_decode_nal_pps(gb, avctx, ps);
++            break;
++        case VVC_NAL_PH:
++            vvc_parse_picture_header(s, nal, avctx);
++            break;
++        case VVC_NAL_TRAIL_NUT:
++        case VVC_NAL_STSA_NUT:
++        case VVC_NAL_RADL_NUT:
++        case VVC_NAL_RASL_NUT:
++        case VVC_NAL_IDR_W_RADL:
++        case VVC_NAL_IDR_N_LP:
++        case VVC_NAL_CRA_NUT:
++        case VVC_NAL_GDR_NUT:
++            ret = vvc_parse_slice_header(s, nal, avctx);
++            if (ret)
++                return ret;
++            break;
++        default:
++            av_log(avctx, AV_LOG_WARNING, "Unable to parse NALU type=%d: %s\n", nal->type, av_err2str(AVERROR_PATCHWELCOME));
++            break;
++        }
++    }
++    /* didn't find a picture! */
++    av_log(avctx, AV_LOG_ERROR, "missing picture in access unit with size %d\n", buf_size);
++    return -1;
++}
++
++/**
++ * Find the end of the current frame in the bitstream.
++ * @return the position of the first byte of the next frame, or END_NOT_FOUND
++ */
++static int vvc_find_frame_end(AVCodecParserContext *s, const uint8_t *buf,
++                              int buf_size)
++{
++    VVCParserContext *ctx = s->priv_data;
++    ParseContext       *pc = &ctx->pc;
++    int i;
++
++    for (i = 0; i < buf_size; i++) {
++        int nut;
++
++        pc->state64 = (pc->state64 << 8) | buf[i];
++
++        if (((pc->state64 >> 3 * 8) & 0xFFFFFF) != START_CODE)
++            continue;
++
++        nut = (pc->state64 >> 8 + 3) & 0x1F;
++        // Beginning of access unit
++        if ((nut >= VVC_NAL_OPI && nut <= VVC_NAL_APS_PREFIX) ||
++            (nut >= VVC_NAL_PH && nut <= VVC_NAL_SEI_PREFIX) ||
++            (nut == VVC_NAL_RSV_VCL_26) ||
++            (nut >= VVC_NAL_UNSPEC_28 && nut <= VVC_NAL_UNSPEC_29)) {
++            if (pc->frame_start_found) {
++                pc->frame_start_found = 0;
++                return i - 5;
++            }
++        } else if (nut <= VVC_NAL_RASL_NUT ||
++                   (nut >= VVC_NAL_IDR_W_RADL && nut <= VVC_NAL_GDR_NUT)) {
++            int first_slice_segment_in_pic_flag = buf[i] >> 7;
++            if (first_slice_segment_in_pic_flag) {
++                if (!pc->frame_start_found) {
++                    pc->frame_start_found = 1;
++                } else { // First slice of next frame found
++                    pc->frame_start_found = 0;
++                    return i - 5;
++                }
++            }
++        }
++    }
++
++    return END_NOT_FOUND;
++}
++
++static int vvc_parse(AVCodecParserContext *s, AVCodecContext *avctx,
++                     const uint8_t **poutbuf, int *poutbuf_size,
++                     const uint8_t *buf, int buf_size)
++{
++    int next;
++    VVCParserContext *ctx = s->priv_data;
++    ParseContext *pc = &ctx->pc;
++    int is_dummy_buf = !buf_size;
++    const uint8_t *dummy_buf = buf;
++
++    if (avctx->extradata && !ctx->parsed_extradata) {
++        av_log(avctx, AV_LOG_ERROR, "Unable to parse extra data: %s\n", av_err2str(AVERROR_PATCHWELCOME));
++        return END_NOT_FOUND;
++    }
++
++    if (s->flags & PARSER_FLAG_COMPLETE_FRAMES) {
++        next = buf_size;
++    } else {
++        next = vvc_find_frame_end(s, buf, buf_size);
++        if (ff_combine_frame(pc, next, &buf, &buf_size) < 0) {
++            *poutbuf      = NULL;
++            *poutbuf_size = 0;
++            return buf_size;
++        }
++    }
++
++    is_dummy_buf &= (dummy_buf == buf);
++
++    if (!is_dummy_buf)
++        parse_nal_units(s, buf, buf_size, avctx);
++
++    *poutbuf      = buf;
++    *poutbuf_size = buf_size;
++    return next;
++}
++
++// Split after the parameter sets at the beginning of the stream if they exist.
++static int vvc_split(AVCodecContext *avctx, const uint8_t *buf, int buf_size)
++{
++    const uint8_t *ptr = buf, *end = buf + buf_size;
++    uint32_t state = -1;
++    int has_vps = 0;
++    int has_sps = 0;
++    int has_pps = 0;
++    int nut;
++
++    while (ptr < end) {
++        ptr = avpriv_find_start_code(ptr, end, &state);
++        if ((state >> 8) != START_CODE)
++            break;
++        nut = (*ptr >> 3) & 0x1F;
++        if (nut == VVC_NAL_VPS)
++            has_vps = 1;
++        else if (nut == VVC_NAL_SPS)
++            has_sps = 1;
++        else if (nut == VVC_NAL_PPS)
++            has_pps = 1;
++        else if ((nut != VVC_NAL_SEI_PREFIX || has_pps) &&
++                  nut != VVC_NAL_AUD) {
++            if (has_vps && has_sps) {
++                while (ptr - 4 > buf && ptr[-5] == 0)
++                    ptr--;
++                return ptr - 4 - buf;
++            }
++        }
++    }
++    return 0;
++}
++
++static void vvc_parser_close(AVCodecParserContext *s)
++{
++    VVCParserContext *ctx = s->priv_data;
++
++    ff_vvc_ps_uninit(&ctx->ps);
++    ff_h2645_packet_uninit(&ctx->pkt);
++
++    av_freep(&ctx->pc.buffer);
++}
++
++AVCodecParser ff_vvc_parser = {
++    .codec_ids      = { AV_CODEC_ID_VVC },
++    .priv_data_size = sizeof(VVCParserContext),
++    .parser_parse   = vvc_parse,
++    .parser_close   = vvc_parser_close,
++    .split          = vvc_split,
++};
+diff --git a/libavcodec/vvc_ps.c b/libavcodec/vvc_ps.c
+new file mode 100644
+index 0000000000..df0c83bb9a
+--- /dev/null
++++ b/libavcodec/vvc_ps.c
+@@ -0,0 +1,548 @@
++/*
++ * VVC Parameter Set decoding
++ *
++ * Copyright (C) 2020 Tencent
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++
++#include "libavutil/imgutils.h"
++#include "libavutil/internal.h"
++#include "libavutil/intmath.h"
++#include "golomb.h"
++#include "vvc_ps.h"
++
++static const uint8_t vvc_sub_width_c[] = {
++    1, 2, 2, 1
++};
++
++static const uint8_t vvc_sub_height_c[] = {
++    1, 2, 1, 1
++};
++
++static void remove_pps(VVCParamSets *s, int id)
++{
++    if (s->pps_list[id] && s->pps == (const VVCPPS*)s->pps_list[id]->data)
++        s->pps = NULL;
++    av_buffer_unref(&s->pps_list[id]);
++}
++
++static void remove_sps(VVCParamSets *s, int id)
++{
++    int i;
++    if (s->sps_list[id]) {
++        if (s->sps == (const VVCSPS*)s->sps_list[id]->data)
++            s->sps = NULL;
++
++        /* drop all PPS that depend on this SPS */
++        for (i = 0; i < FF_ARRAY_ELEMS(s->pps_list); i++)
++            if (s->pps_list[i] && ((VVCPPS*)s->pps_list[i]->data)->sps_id == id)
++                remove_pps(s, i);
++
++        av_assert0(!(s->sps_list[id] && s->sps == (VVCSPS*)s->sps_list[id]->data));
++    }
++    av_buffer_unref(&s->sps_list[id]);
++}
++
++static int decode_profile_tier_level(GetBitContext *gb, AVCodecContext *avctx,
++                                      PTL *ptl)
++{
++    if (get_bits_left(gb) < 7+1)
++        return -1;
++
++    ptl->general_profile_idc = get_bits(gb, 7);
++    ptl->general_tier_flag   = get_bits1(gb);
++
++    if (ptl->general_profile_idc == FF_PROFILE_VVC_MAIN_10)
++        av_log(avctx, AV_LOG_DEBUG, "Main 10 profile bitstream\n");
++    else if (ptl->general_profile_idc == FF_PROFILE_VVC_MAIN_10_STILL_PICTURE)
++        av_log(avctx, AV_LOG_DEBUG, "Main 10 Still Picture profile bitstream\n");
++    else if (ptl->general_profile_idc == FF_PROFILE_VVC_MAIN_10_444)
++        av_log(avctx, AV_LOG_DEBUG, "Main 10 4:4:4 profile bitstream\n");
++    else if (ptl->general_profile_idc == FF_PROFILE_VVC_MAIN_10_444_STILL_PICTURE)
++        av_log(avctx, AV_LOG_DEBUG, "Main 10 4:4:4 Still Picture profile bitstream\n");
++    else if (ptl->general_profile_idc == FF_PROFILE_VVC_MULTILAYER_MAIN_10)
++        av_log(avctx, AV_LOG_DEBUG, "Multilayer Main 10 profile bitstream\n");
++    else if (ptl->general_profile_idc == FF_PROFILE_VVC_MULTILAYER_MAIN_10_444)
++        av_log(avctx, AV_LOG_DEBUG, "Multilayer Main 10 4:4:4 profile bitstream\n");
++    else
++        av_log(avctx, AV_LOG_WARNING, "Unknown VVC profile: %d\n", ptl->general_profile_idc);
++
++    return 0;
++}
++
++static int decode_constraints_info(GetBitContext *gb, AVCodecContext *avctx,
++                                    GCI *gci)
++{
++    if (get_bits_left(gb) < 1)
++        return -1;
++
++    gci->gci_present_flag = get_bits1(gb);
++    if (gci->gci_present_flag) {
++        if (get_bits_left(gb) < 3 + 6 + 10 + 6 + 5 + 6 + 16 + 13 + 14)
++            return -1;
++
++        gci->gci_intra_only_constraint_flag = get_bits1(gb);
++        gci->gci_all_layers_independent_constraint_flag = get_bits1(gb);
++        gci->gci_one_au_only_constraint_flag = get_bits1(gb);
++
++        gci->gci_sixteen_minus_max_bitdepth_constraint_idc = get_bits(gb, 4);
++        gci->gci_three_minus_max_chroma_format_constraint_idc = get_bits(gb, 2);
++
++        gci->gci_no_mixed_nalu_types_in_pic_constraint_flag = get_bits1(gb);
++        gci->gci_no_trail_constraint_flag = get_bits1(gb);
++        gci->gci_no_stsa_constraint_flag = get_bits1(gb);
++        gci->gci_no_rasl_constraint_flag = get_bits1(gb);
++        gci->gci_no_radl_constraint_flag = get_bits1(gb);
++        gci->gci_no_idr_constraint_flag = get_bits1(gb);
++        gci->gci_no_cra_constraint_flag = get_bits1(gb);
++        gci->gci_no_gdr_constraint_flag = get_bits1(gb);
++        gci->gci_no_aps_constraint_flag = get_bits1(gb);
++        gci->gci_no_idr_rpl_constraint_flag = get_bits1(gb);
++
++        gci->gci_one_tile_per_pic_constraint_flag = get_bits1(gb);
++        gci->gci_pic_header_in_slice_header_constraint_flag = get_bits1(gb);
++        gci->gci_one_slice_per_pic_constraint_flag = get_bits1(gb);
++        gci->gci_no_rectangular_slice_constraint_flag = get_bits1(gb);
++        gci->gci_one_slice_per_subpic_constraint_flag = get_bits1(gb);
++        gci->gci_no_subpic_info_constraint_flag = get_bits1(gb);
++
++        gci->gci_three_minus_max_log2_ctu_size_constraint_idc = get_bits(gb, 2);
++        gci->gci_no_partition_constraints_override_constraint_flag = get_bits1(gb);
++        gci->gci_no_mtt_constraint_flag = get_bits1(gb);
++        gci->gci_no_qtbtt_dual_tree_intra_constraint_flag = get_bits1(gb);
++
++        gci->gci_no_palette_constraint_flag = get_bits1(gb);
++        gci->gci_no_ibc_constraint_flag = get_bits1(gb);
++        gci->gci_no_isp_constraint_flag = get_bits1(gb);
++        gci->gci_no_mrl_constraint_flag = get_bits1(gb);
++        gci->gci_no_mip_constraint_flag = get_bits1(gb);
++        gci->gci_no_cclm_constraint_flag = get_bits1(gb);
++
++        gci->gci_no_ref_pic_resampling_constraint_flag = get_bits1(gb);
++        gci->gci_no_res_change_in_clvs_constraint_flag = get_bits1(gb);
++        gci->gci_no_weighted_prediction_constraint_flag = get_bits1(gb);
++        gci->gci_no_ref_wraparound_constraint_flag = get_bits1(gb);
++        gci->gci_no_temporal_mvp_constraint_flag = get_bits1(gb);
++        gci->gci_no_sbtmvp_constraint_flag  = get_bits1(gb);
++        gci->gci_no_amvr_constraint_flag = get_bits1(gb);
++        gci->gci_no_bdof_constraint_flag = get_bits1(gb);
++        gci->gci_no_smvd_constraint_flag = get_bits1(gb);
++        gci->gci_no_dmvr_constraint_flag = get_bits1(gb);
++        gci->gci_no_mmvd_constraint_flag = get_bits1(gb);
++        gci->gci_no_affine_motion_constraint_flag = get_bits1(gb);
++        gci->gci_no_prof_constraint_flag = get_bits1(gb);
++        gci->gci_no_bcw_constraint_flag = get_bits1(gb);
++        gci->gci_no_ciip_constraint_flag = get_bits1(gb);
++        gci->gci_no_gpm_constraint_flag = get_bits1(gb);
++
++        gci->gci_no_luma_transform_size_64_constraint_flag = get_bits1(gb);
++        gci->gci_no_transform_skip_constraint_flag = get_bits1(gb);
++        gci->gci_no_bdpcm_constraint_flag = get_bits1(gb);
++        gci->gci_no_mts_constraint_flag = get_bits1(gb);
++        gci->gci_no_lfnst_constraint_flag = get_bits1(gb);
++        gci->gci_no_joint_cbcr_constraint_flag = get_bits1(gb);
++        gci->gci_no_sbt_constraint_flag = get_bits1(gb);
++        gci->gci_no_act_constraint_flag = get_bits1(gb);
++        gci->gci_no_explicit_scaling_list_constraint_flag = get_bits1(gb);
++        gci->gci_no_dep_quant_constraint_flag = get_bits1(gb);
++        gci->gci_no_sign_data_hiding_constraint_flag = get_bits1(gb);
++        gci->gci_no_cu_qp_delta_constraint_flag = get_bits1(gb);
++        gci->gci_no_chroma_qp_offset_constraint_flag = get_bits1(gb);
++
++        gci->gci_no_sao_constraint_flag = get_bits1(gb);
++        gci->gci_no_alf_constraint_flag = get_bits1(gb);
++        gci->gci_no_ccalf_constraint_flag = get_bits1(gb);
++        gci->gci_no_lmcs_constraint_flag = get_bits1(gb);
++        gci->gci_no_ladf_constraint_flag = get_bits1(gb);
++        gci->gci_no_virtual_boundaries_constraint_flag = get_bits1(gb);
++
++        int gci_num_reserved_bits = get_bits(gb, 8);
++        if (gci_num_reserved_bits) {
++            if (get_bits_left(gb) < gci_num_reserved_bits)
++                return -1;
++            skip_bits(gb, gci_num_reserved_bits);
++        }
++    }
++
++    align_get_bits(gb);
++
++    return 0;
++}
++
++static int parse_ptl(GetBitContext *gb, AVCodecContext *avctx,
++                      PTL *ptl, int max_num_sub_layers)
++{
++    int i;
++    if (decode_profile_tier_level(gb, avctx, ptl) < 0) {
++        av_log(avctx, AV_LOG_ERROR, "PTL information too short\n");
++        return -1;
++    }
++
++    ptl->general_level_idc = get_bits(gb, 8);
++    ptl->ptl_frame_only_constraint_flag = get_bits1(gb);
++    ptl->ptl_multilayer_enabled_flag = get_bits1(gb);
++
++    if (decode_constraints_info(gb, avctx, &ptl->gci) < 0) {
++        av_log(avctx, AV_LOG_ERROR, "GCI information too short\n");
++        return -1;
++    }
++
++    if (get_bits_left(gb) < max_num_sub_layers - 1)
++        return -1;
++
++    for (i = max_num_sub_layers - 2; i >= 0; i--)
++        ptl->ptl_sublayer_level_present_flag[i] = get_bits1(gb);
++    align_get_bits(gb);
++
++    for (i = max_num_sub_layers - 2; i >= 0; i--)
++        if (ptl->ptl_sublayer_level_present_flag[i]) {
++            if (get_bits_left(gb) < 1)
++                return -1;
++            ptl->sublayer_level_idc[i] = get_bits(gb, 8);
++        }
++
++    if (get_bits_left(gb) < 8)
++        return -1;
++
++    ptl->ptl_num_sub_profiles = get_bits(gb, 8);
++
++    if (get_bits_left(gb) < 32 * ptl->ptl_num_sub_profiles)
++        return -1;
++
++    for (i = 0; i < ptl->ptl_num_sub_profiles; i++)
++        ptl->general_sub_profile_idc[i] = get_bits_long(gb, 32);
++
++    return 0;
++}
++
++static int map_pixel_format(AVCodecContext *avctx, VVCSPS *sps)
++{
++    const AVPixFmtDescriptor *desc;
++    switch (sps->bit_depth) {
++    case 8:
++        if (sps->chroma_format_idc == 0) sps->pix_fmt = AV_PIX_FMT_GRAY8;
++        if (sps->chroma_format_idc == 1) sps->pix_fmt = AV_PIX_FMT_YUV420P;
++        if (sps->chroma_format_idc == 2) sps->pix_fmt = AV_PIX_FMT_YUV422P;
++        if (sps->chroma_format_idc == 3) sps->pix_fmt = AV_PIX_FMT_YUV444P;
++       break;
++    case 9:
++        if (sps->chroma_format_idc == 0) sps->pix_fmt = AV_PIX_FMT_GRAY9;
++        if (sps->chroma_format_idc == 1) sps->pix_fmt = AV_PIX_FMT_YUV420P9;
++        if (sps->chroma_format_idc == 2) sps->pix_fmt = AV_PIX_FMT_YUV422P9;
++        if (sps->chroma_format_idc == 3) sps->pix_fmt = AV_PIX_FMT_YUV444P9;
++        break;
++    case 10:
++        if (sps->chroma_format_idc == 0) sps->pix_fmt = AV_PIX_FMT_GRAY10;
++        if (sps->chroma_format_idc == 1) sps->pix_fmt = AV_PIX_FMT_YUV420P10;
++        if (sps->chroma_format_idc == 2) sps->pix_fmt = AV_PIX_FMT_YUV422P10;
++        if (sps->chroma_format_idc == 3) sps->pix_fmt = AV_PIX_FMT_YUV444P10;
++        break;
++    default:
++        av_log(avctx, AV_LOG_ERROR,
++               "The following bit-depths are currently specified: 8, 9, and 10 bits, "
++               "chroma_format_idc is %d, depth is %d\n",
++               sps->chroma_format_idc, sps->bit_depth);
++        return AVERROR_INVALIDDATA;
++    }
++
++    desc = av_pix_fmt_desc_get(sps->pix_fmt);
++    if (!desc)
++        return AVERROR(EINVAL);
++
++    sps->hshift[0] = sps->vshift[0] = 0;
++    sps->hshift[2] = sps->hshift[1] = desc->log2_chroma_w;
++    sps->vshift[2] = sps->vshift[1] = desc->log2_chroma_h;
++
++    sps->pixel_shift = sps->bit_depth > 8;
++
++    return 0;
++}
++
++int ff_vvc_parse_sps(VVCSPS *sps, GetBitContext *gb, unsigned int *sps_id,
++                     int apply_defdispwin, AVBufferRef **vps_list, AVCodecContext *avctx)
++{
++    int ret = 0;
++    int i;
++
++    // Coded parameters
++
++    *sps_id = get_bits(gb, 4);
++
++    sps->vps_id = get_bits(gb, 4);
++
++    if (vps_list) {
++        av_log(avctx, AV_LOG_WARNING, "Unable to validate VPS: %s\n", av_err2str(AVERROR_PATCHWELCOME));
++    }
++
++    sps->max_sub_layers = get_bits(gb, 3) + 1;
++    if (sps->max_sub_layers > VVC_MAX_SUB_LAYERS) {
++        av_log(avctx, AV_LOG_ERROR, "sps_max_sub_layers out of range: %d\n",
++               sps->max_sub_layers);
++        return AVERROR_INVALIDDATA;
++    }
++
++    sps->chroma_format_idc = get_bits(gb, 2);
++    // TODO: check range conformance
++    // if (sps->chroma_format_idc > 3U) {
++    //     av_log(avctx, AV_LOG_ERROR, "chroma_format_idc %d is invalid\n", sps->chroma_format_idc);
++    //     return AVERROR_INVALIDDATA;
++    // }
++
++    sps->ctu_size = 1 << (get_bits(gb, 2) + 5);
++    if (sps->ctu_size > 128) {
++        av_log(avctx, AV_LOG_ERROR, "ctu_size %d is invalid\n", sps->ctu_size);
++        return AVERROR_INVALIDDATA;
++    }
++
++    sps->ptl_dbp_hrd_present_flag = get_bits1(gb);
++    if (sps->ptl_dbp_hrd_present_flag)
++        if ((ret = parse_ptl(gb, avctx, &sps->ptl, sps->max_sub_layers)) < 0)
++            return ret;
++
++    sps->gdr_enabled_flag = get_bits1(gb);
++    sps->ref_pic_resampling_enabled_flag = get_bits1(gb);
++    if (sps->ref_pic_resampling_enabled_flag)
++        sps->res_change_in_clvs_allowed_flag = get_bits1(gb);
++
++    sps->width  = get_ue_golomb_long(gb);
++    sps->height = get_ue_golomb_long(gb);
++    if ((ret = av_image_check_size(sps->width,
++                                   sps->height, 0, avctx)) < 0)
++        return ret;
++
++    if (get_bits1(gb)) { // pic_conformance_flag
++        int vert_mult  = vvc_sub_height_c[sps->chroma_format_idc];
++        int horiz_mult = vvc_sub_width_c[sps->chroma_format_idc];
++        sps->pic_conf_win.left_offset   = get_ue_golomb_long(gb) * horiz_mult;
++        sps->pic_conf_win.right_offset  = get_ue_golomb_long(gb) * horiz_mult;
++        sps->pic_conf_win.top_offset    = get_ue_golomb_long(gb) *  vert_mult;
++        sps->pic_conf_win.bottom_offset = get_ue_golomb_long(gb) *  vert_mult;
++
++        if (avctx->flags2 & AV_CODEC_FLAG2_IGNORE_CROP) {
++            av_log(avctx, AV_LOG_DEBUG,
++                   "discarding sps conformance window, "
++                   "original values are l:%u r:%u t:%u b:%u\n",
++                   sps->pic_conf_win.left_offset,
++                   sps->pic_conf_win.right_offset,
++                   sps->pic_conf_win.top_offset,
++                   sps->pic_conf_win.bottom_offset);
++
++            sps->pic_conf_win.left_offset   =
++            sps->pic_conf_win.right_offset  =
++            sps->pic_conf_win.top_offset    =
++            sps->pic_conf_win.bottom_offset = 0;
++        }
++        sps->output_window = sps->pic_conf_win;
++    }
++
++    sps->subpic_info_present_flag = get_bits1(gb);
++    if (sps->subpic_info_present_flag) {
++        sps->num_subpics = get_ue_golomb_long(gb) + 1;
++        if (sps->num_subpics > 1) {
++            sps->independent_subpics_flag = get_bits1(gb);
++            sps->subpic_same_size_flag = get_bits1(gb);
++            const int log2_width = av_log2((sps->width + sps->ctu_size - 1) / sps->ctu_size);
++            const int log2_height = av_log2((sps->height + sps->ctu_size - 1) / sps->ctu_size);
++            for (i = 0; i < sps->num_subpics; i++) {
++                if (!sps->subpic_same_size_flag || i == 0) {
++                    if (i > 0 && sps->width > sps->ctu_size)
++                        sps->subpic[i].ctu_top_left_x = get_bits(gb, log2_width);
++                    if (i > 0 && sps->height > sps->ctu_size)
++                        sps->subpic[i].ctu_top_left_y = get_bits(gb, log2_height);
++                    if (i < sps->num_subpics - 1 && sps->width > sps->ctu_size)
++                        sps->subpic[i].width = get_bits(gb, log2_width);
++                    if (i < sps->num_subpics - 1 && sps->height > sps->ctu_size)
++                        sps->subpic[i].height = get_bits(gb, log2_height);
++                }
++                if (!sps->independent_subpics_flag) {
++                    sps->subpic[i].subpic_treated_as_pic_flag = get_bits1(gb);
++                    sps->subpic[i].loop_filter_across_subpic_enabled_flag = get_bits1(gb);
++                }
++            }
++        }
++        sps->subpic_id_len = get_ue_golomb_long(gb) + 1;
++        sps->subpic_id_mapping_explicitly_signalled_flag = get_bits1(gb);
++        if (sps->subpic_id_mapping_explicitly_signalled_flag) {
++            sps->subpic_id_mapping_present_flag = get_bits1(gb);
++            if (sps->subpic_id_mapping_present_flag) {
++                for (i = 0; i < sps->num_subpics; i++)
++                    sps->subpic[i].id = get_bits(gb, sps->subpic_id_len);
++            }
++        }
++    }
++
++    sps->bit_depth = get_ue_golomb_long(gb) + 8;
++    ret = map_pixel_format(avctx, sps);
++    if (ret < 0)
++        return ret;
++
++    // TODO: parse remaining syntax
++
++    return 0;
++}
++
++int ff_vvc_decode_nal_sps(GetBitContext *gb, AVCodecContext *avctx,
++                          VVCParamSets *ps, int apply_defdispwin)
++{
++    VVCSPS *sps;
++    AVBufferRef *sps_buf = av_buffer_allocz(sizeof(*sps));
++    unsigned int sps_id;
++    int ret;
++    ptrdiff_t nal_size;
++
++    if (!sps_buf)
++        return AVERROR(ENOMEM);
++    sps = (VVCSPS*)sps_buf->data;
++
++    av_log(avctx, AV_LOG_DEBUG, "Decoding SPS\n");
++
++    nal_size = gb->buffer_end - gb->buffer;
++    if (nal_size > sizeof(sps->data)) {
++        av_log(avctx, AV_LOG_WARNING, "Truncating likely oversized SPS "
++               "(%"PTRDIFF_SPECIFIER" > %"SIZE_SPECIFIER")\n",
++               nal_size, sizeof(sps->data));
++        sps->data_size = sizeof(sps->data);
++    } else {
++        sps->data_size = nal_size;
++    }
++    memcpy(sps->data, gb->buffer, sps->data_size);
++
++    ret = ff_vvc_parse_sps(sps, gb, &sps_id,
++                           apply_defdispwin,
++                           NULL, avctx);
++    if (ret < 0) {
++        av_buffer_unref(&sps_buf);
++        return ret;
++    }
++
++    if (avctx->debug & FF_DEBUG_BITSTREAM) {
++        av_log(avctx, AV_LOG_DEBUG,
++               "Parsed SPS: id %d; coded wxh: %dx%d; "
++               "cropped wxh: %dx%d; pix_fmt: %s.\n",
++               sps_id, sps->width, sps->height,
++               sps->width - (sps->output_window.left_offset + sps->output_window.right_offset),
++               sps->height - (sps->output_window.top_offset + sps->output_window.bottom_offset),
++               av_get_pix_fmt_name(sps->pix_fmt));
++    }
++
++    /* check if this is a repeat of an already parsed SPS, then keep the
++     * original one.
++     * otherwise drop all PPSes that depend on it */
++    if (ps->sps_list[sps_id] &&
++        !memcmp(ps->sps_list[sps_id]->data, sps_buf->data, sps_buf->size)) {
++        av_buffer_unref(&sps_buf);
++    } else {
++        remove_sps(ps, sps_id);
++        ps->sps_list[sps_id] = sps_buf;
++    }
++
++    return 0;
++}
++
++static void vvc_pps_free(void *opaque, uint8_t *data)
++{
++    VVCPPS *pps = (VVCPPS*)data;
++
++    av_freep(&pps);
++}
++
++int ff_vvc_decode_nal_pps(GetBitContext *gb, AVCodecContext *avctx,
++                          VVCParamSets *ps)
++{
++    int ret = 0;
++    unsigned int pps_id = 0;
++    ptrdiff_t nal_size;
++
++    AVBufferRef *pps_buf;
++    VVCPPS *pps = av_mallocz(sizeof(*pps));
++
++    if (!pps)
++        return AVERROR(ENOMEM);
++
++    pps_buf = av_buffer_create((uint8_t *)pps, sizeof(*pps),
++                               vvc_pps_free, NULL, 0);
++    if (!pps_buf) {
++        av_freep(&pps);
++        return AVERROR(ENOMEM);
++    }
++
++    av_log(avctx, AV_LOG_DEBUG, "Decoding PPS\n");
++
++    nal_size = gb->buffer_end - gb->buffer;
++    if (nal_size > sizeof(pps->data)) {
++        av_log(avctx, AV_LOG_WARNING, "Truncating likely oversized PPS "
++               "(%"PTRDIFF_SPECIFIER" > %"SIZE_SPECIFIER")\n",
++               nal_size, sizeof(pps->data));
++        pps->data_size = sizeof(pps->data);
++    } else {
++        pps->data_size = nal_size;
++    }
++    memcpy(pps->data, gb->buffer, pps->data_size);
++
++    // Coded parameters
++    pps_id = get_bits(gb, 6);
++    if (pps_id >= VVC_MAX_PPS_COUNT) {
++        av_log(avctx, AV_LOG_ERROR, "PPS id out of range: %d\n", pps_id);
++        ret = AVERROR_INVALIDDATA;
++        goto err;
++    }
++    pps->sps_id = get_bits(gb, 4);
++    if (pps->sps_id >= VVC_MAX_SPS_COUNT) {
++        av_log(avctx, AV_LOG_ERROR, "SPS id out of range: %d\n", pps->sps_id);
++        ret = AVERROR_INVALIDDATA;
++        goto err;
++    }
++    if (!ps->sps_list[pps->sps_id]) {
++        av_log(avctx, AV_LOG_ERROR, "SPS %u does not exist.\n", pps->sps_id);
++        ret = AVERROR_INVALIDDATA;
++        goto err;
++    }
++
++    // TODO: parse remaining syntax
++
++    if (get_bits_left(gb) < 0) {
++        av_log(avctx, AV_LOG_ERROR,
++               "Overread PPS by %d bits\n", -get_bits_left(gb));
++        goto err;
++    }
++
++    remove_pps(ps, pps_id);
++    ps->pps_list[pps_id] = pps_buf;
++
++    return 0;
++
++err:
++    av_buffer_unref(&pps_buf);
++    return ret;
++}
++
++void ff_vvc_ps_uninit(VVCParamSets *ps)
++{
++    int i;
++
++    // for (i = 0; i < FF_ARRAY_ELEMS(ps->vps_list); i++)
++    //     av_buffer_unref(&ps->vps_list[i]);
++    for (i = 0; i < FF_ARRAY_ELEMS(ps->sps_list); i++)
++        av_buffer_unref(&ps->sps_list[i]);
++    for (i = 0; i < FF_ARRAY_ELEMS(ps->pps_list); i++)
++        av_buffer_unref(&ps->pps_list[i]);
++
++    // ps->vps = NULL;
++    ps->sps = NULL;
++    ps->pps = NULL;
++}
+diff --git a/libavcodec/vvc_ps.h b/libavcodec/vvc_ps.h
+new file mode 100644
+index 0000000000..19dea00c38
+--- /dev/null
++++ b/libavcodec/vvc_ps.h
+@@ -0,0 +1,213 @@
++/*
++ * VVC parameter set parsing
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++
++#ifndef AVCODEC_VVC_PS_H
++#define AVCODEC_VVC_PS_H
++
++#include "avcodec.h"
++#include "get_bits.h"
++#include "vvc.h"
++
++typedef struct VVCWindow {
++    unsigned int left_offset;
++    unsigned int right_offset;
++    unsigned int top_offset;
++    unsigned int bottom_offset;
++} VVCWindow;
++
++typedef struct VVCSubPic {
++    int ctu_top_left_x;
++    int ctu_top_left_y;
++    int width;
++    int height;
++    uint8_t subpic_treated_as_pic_flag;
++    uint8_t loop_filter_across_subpic_enabled_flag;
++    int id;
++} VVCSubPic;
++
++// typedef struct PTLCommon {
++//     uint8_t profile_idc;
++// } PTLCommon;
++
++typedef struct GCI {
++    uint8_t gci_present_flag;
++    /* general */
++    uint8_t gci_intra_only_constraint_flag;
++    uint8_t gci_all_layers_independent_constraint_flag;
++    uint8_t gci_one_au_only_constraint_flag;
++    /* picture format */
++    uint8_t gci_sixteen_minus_max_bitdepth_constraint_idc;
++    uint8_t gci_three_minus_max_chroma_format_constraint_idc;
++    /* NAL unit type related */
++    uint8_t gci_no_mixed_nalu_types_in_pic_constraint_flag;
++    uint8_t gci_no_trail_constraint_flag;
++    uint8_t gci_no_stsa_constraint_flag;
++    uint8_t gci_no_rasl_constraint_flag;
++    uint8_t gci_no_radl_constraint_flag;
++    uint8_t gci_no_idr_constraint_flag;
++    uint8_t gci_no_cra_constraint_flag;
++    uint8_t gci_no_gdr_constraint_flag;
++    uint8_t gci_no_aps_constraint_flag;
++    uint8_t gci_no_idr_rpl_constraint_flag;
++    /* tile, slice, subpicture partitioning */
++    uint8_t gci_one_tile_per_pic_constraint_flag;
++    uint8_t gci_pic_header_in_slice_header_constraint_flag;
++    uint8_t gci_one_slice_per_pic_constraint_flag;
++    uint8_t gci_no_rectangular_slice_constraint_flag;
++    uint8_t gci_one_slice_per_subpic_constraint_flag;
++    uint8_t gci_no_subpic_info_constraint_flag;
++    /* CTU and block partitioning */
++    uint8_t gci_three_minus_max_log2_ctu_size_constraint_idc;
++    uint8_t gci_no_partition_constraints_override_constraint_flag;
++    uint8_t gci_no_mtt_constraint_flag;
++    uint8_t gci_no_qtbtt_dual_tree_intra_constraint_flag;
++    /* intra */
++    uint8_t gci_no_palette_constraint_flag;
++    uint8_t gci_no_ibc_constraint_flag;
++    uint8_t gci_no_isp_constraint_flag;
++    uint8_t gci_no_mrl_constraint_flag;
++    uint8_t gci_no_mip_constraint_flag;
++    uint8_t gci_no_cclm_constraint_flag;
++    /* inter */
++    uint8_t gci_no_ref_pic_resampling_constraint_flag;
++    uint8_t gci_no_res_change_in_clvs_constraint_flag;
++    uint8_t gci_no_weighted_prediction_constraint_flag;
++    uint8_t gci_no_ref_wraparound_constraint_flag;
++    uint8_t gci_no_temporal_mvp_constraint_flag;
++    uint8_t gci_no_sbtmvp_constraint_flag ;
++    uint8_t gci_no_amvr_constraint_flag;
++    uint8_t gci_no_bdof_constraint_flag;
++    uint8_t gci_no_smvd_constraint_flag;
++    uint8_t gci_no_dmvr_constraint_flag;
++    uint8_t gci_no_mmvd_constraint_flag;
++    uint8_t gci_no_affine_motion_constraint_flag;
++    uint8_t gci_no_prof_constraint_flag;
++    uint8_t gci_no_bcw_constraint_flag;
++    uint8_t gci_no_ciip_constraint_flag;
++    uint8_t gci_no_gpm_constraint_flag;
++    /* transform, quantization, residual */
++    uint8_t gci_no_luma_transform_size_64_constraint_flag;
++    uint8_t gci_no_transform_skip_constraint_flag;
++    uint8_t gci_no_bdpcm_constraint_flag;
++    uint8_t gci_no_mts_constraint_flag;
++    uint8_t gci_no_lfnst_constraint_flag;
++    uint8_t gci_no_joint_cbcr_constraint_flag;
++    uint8_t gci_no_sbt_constraint_flag;
++    uint8_t gci_no_act_constraint_flag;
++    uint8_t gci_no_explicit_scaling_list_constraint_flag;
++    uint8_t gci_no_dep_quant_constraint_flag;
++    uint8_t gci_no_sign_data_hiding_constraint_flag;
++    uint8_t gci_no_cu_qp_delta_constraint_flag;
++    uint8_t gci_no_chroma_qp_offset_constraint_flag;
++    /* loop filter */
++    uint8_t gci_no_sao_constraint_flag;
++    uint8_t gci_no_alf_constraint_flag;
++    uint8_t gci_no_ccalf_constraint_flag;
++    uint8_t gci_no_lmcs_constraint_flag;
++    uint8_t gci_no_ladf_constraint_flag;
++    uint8_t gci_no_virtual_boundaries_constraint_flag;
++} GCI;
++
++typedef struct PTL {
++    uint8_t general_profile_idc;
++    uint8_t general_tier_flag;
++    uint8_t general_level_idc;
++    uint8_t ptl_frame_only_constraint_flag;
++    uint8_t ptl_multilayer_enabled_flag;
++    GCI gci;
++    uint8_t ptl_sublayer_level_present_flag[VVC_MAX_SUB_LAYERS];
++    uint8_t sublayer_level_idc[VVC_MAX_SUB_LAYERS];
++    uint8_t ptl_num_sub_profiles;
++    uint32_t general_sub_profile_idc[256];
++} PTL;
++
++typedef struct VVCSPS {
++    unsigned vps_id;
++    int max_sub_layers;
++    int chroma_format_idc;
++    unsigned ctu_size;
++    int ptl_dbp_hrd_present_flag;
++    PTL ptl;
++    int gdr_enabled_flag;
++    int ref_pic_resampling_enabled_flag;
++    int res_change_in_clvs_allowed_flag;
++    int width;
++    int height;
++    VVCWindow pic_conf_win;
++    int subpic_info_present_flag;
++    int num_subpics;
++    int independent_subpics_flag;
++    int subpic_same_size_flag;
++    VVCSubPic subpic[600];
++    int subpic_id_len;
++    int subpic_id_mapping_explicitly_signalled_flag;
++    int subpic_id_mapping_present_flag;
++
++    int bit_depth;
++    int pixel_shift;
++    enum AVPixelFormat pix_fmt;
++
++    VVCWindow output_window;
++
++    int hshift[3];
++    int vshift[3];
++
++    uint8_t data[4096];
++    int data_size;
++} VVCSPS;
++
++typedef struct VVCPPS {
++    unsigned int sps_id;
++
++    uint8_t data[4096];
++    int data_size;
++} VVCPPS;
++
++typedef struct VVCParamSets {
++    // AVBufferRef *vps_list[VVC_MAX_VPS_COUNT];
++    AVBufferRef *sps_list[VVC_MAX_SPS_COUNT];
++    AVBufferRef *pps_list[VVC_MAX_PPS_COUNT];
++
++    /* currently active parameter sets */
++    // const VVCVPS *vps;
++    const VVCSPS *sps;
++    const VVCPPS *pps;
++} VVCParamSets;
++
++/**
++ * Parse the SPS from the bitstream into the provided VVCSPS struct.
++ *
++ * @param sps_id the SPS id will be written here
++ * @param apply_defdispwin if set 1, the default display window from the VUI
++ *                         will be applied to the video dimensions
++ * @param vps_list if non-NULL, this function will validate that the SPS refers
++ *                 to an existing VPS
++ */
++int ff_vvc_parse_sps(VVCSPS *sps, GetBitContext *gb, unsigned int *sps_id,
++                     int apply_defdispwin, AVBufferRef **vps_list, AVCodecContext *avctx);
++
++int ff_vvc_decode_nal_sps(GetBitContext *gb, AVCodecContext *avctx,
++                          VVCParamSets *ps, int apply_defdispwin);
++int ff_vvc_decode_nal_pps(GetBitContext *gb, AVCodecContext *avctx,
++                          VVCParamSets *ps);
++
++void ff_vvc_ps_uninit(VVCParamSets *ps);
++
++#endif /* AVCODEC_VVC_PS_H */
+diff --git a/libavformat/Makefile b/libavformat/Makefile
+index 734b703862..c0b5ea5d46 100644
+--- a/libavformat/Makefile
++++ b/libavformat/Makefile
+@@ -513,6 +513,7 @@ OBJS-$(CONFIG_VOC_MUXER)                 += vocenc.o voc.o
+ OBJS-$(CONFIG_VPK_DEMUXER)               += vpk.o
+ OBJS-$(CONFIG_VPLAYER_DEMUXER)           += vplayerdec.o subtitles.o
+ OBJS-$(CONFIG_VQF_DEMUXER)               += vqf.o
++OBJS-$(CONFIG_VVC_DEMUXER)               += vvcdec.o rawdec.o
+ OBJS-$(CONFIG_W64_DEMUXER)               += wavdec.o w64.o pcm.o
+ OBJS-$(CONFIG_W64_MUXER)                 += wavenc.o w64.o
+ OBJS-$(CONFIG_WAV_DEMUXER)               += wavdec.o pcm.o
+diff --git a/libavformat/allformats.c b/libavformat/allformats.c
+index 6a9b9883c9..d13f7a410c 100644
+--- a/libavformat/allformats.c
++++ b/libavformat/allformats.c
+@@ -338,6 +338,7 @@ static void register_all(void)
+     REGISTER_DEMUXER (VPK,              vpk);
+     REGISTER_DEMUXER (VPLAYER,          vplayer);
+     REGISTER_DEMUXER (VQF,              vqf);
++    REGISTER_DEMUXER (VVC,              vvc);
+     REGISTER_MUXDEMUX(W64,              w64);
+     REGISTER_MUXDEMUX(WAV,              wav);
+     REGISTER_DEMUXER (WC3,              wc3);
+diff --git a/libavformat/utils.c b/libavformat/utils.c
+index 84e49208b8..96376c7ffa 100644
+--- a/libavformat/utils.c
++++ b/libavformat/utils.c
+@@ -3585,7 +3585,10 @@ FF_ENABLE_DEPRECATION_WARNINGS
+ 
+         /* Force thread count to 1 since the H.264 decoder will not extract
+          * SPS and PPS to extradata during multi-threaded decoding. */
+-        av_dict_set(options ? &options[i] : &thread_opt, "threads", "1", 0);
++        if (st->codecpar->codec_id == AV_CODEC_ID_VVC && !av_dict_get(options ? options[i] : thread_opt, "threads", NULL, 0))
++            av_dict_set(options ? &options[i] : &thread_opt, "threads", "auto", 0);
++        else
++            av_dict_set(options ? &options[i] : &thread_opt, "threads", "1", 0);
+ 
+         if (ic->codec_whitelist)
+             av_dict_set(options ? &options[i] : &thread_opt, "codec_whitelist", ic->codec_whitelist, 0);
+diff --git a/libavformat/vvcdec.c b/libavformat/vvcdec.c
+new file mode 100644
+index 0000000000..50943ec697
+--- /dev/null
++++ b/libavformat/vvcdec.c
+@@ -0,0 +1,58 @@
++/*
++ * RAW VVC video demuxer
++ * Copyright (c) 2020 Tencent
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++
++#include "libavcodec/vvc.h"
++
++#include "avformat.h"
++#include "rawdec.h"
++
++static int vvc_probe(const AVProbeData *p)
++{
++    uint32_t code = -1;
++    int sps = 0, pps = 0, irap = 0;
++    int i;
++
++    for (i = 0; i < p->buf_size - 1; i++) {
++        code = (code << 8) + p->buf[i];
++        if ((code & 0xffffff00) == 0x100) {
++            const uint8_t nal2 = p->buf[i + 1];
++            const int type = nal2 >> 3;
++
++            if (code & 0xa0) // forbidden and reserved zero bits
++                return 0;
++
++            switch (type) {
++            case VVC_NAL_SPS:        sps++;  break;
++            case VVC_NAL_PPS:        pps++;  break;
++            case VVC_NAL_IDR_W_RADL:
++            case VVC_NAL_IDR_N_LP:
++            case VVC_NAL_CRA_NUT:
++            case VVC_NAL_GDR_NUT:    irap++; break;
++            }
++        }
++    }
++
++    if (sps && pps && irap)
++        return AVPROBE_SCORE_EXTENSION + 1; // 1 more than .mpg
++    return 0;
++}
++
++FF_DEF_RAWVIDEO_DEMUXER(vvc, "raw VVC video", vvc_probe, "vvc,h266,266", AV_CODEC_ID_VVC)

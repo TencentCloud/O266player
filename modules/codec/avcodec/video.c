@@ -527,6 +527,9 @@ int InitVideoDec( vlc_object_t *obj )
     else p_sys->i_skip_frame = AVDISCARD_DEFAULT;
     p_context->skip_frame = p_sys->i_skip_frame;
 
+    if (p_sys->p_codec->id == AV_CODEC_ID_VVC)
+        p_dec->b_frame_drop_allowed = false;
+
     i_val = var_CreateGetInteger( p_dec, "avcodec-skip-idct" );
     if( i_val >= 4 ) p_context->skip_idct = AVDISCARD_ALL;
     else if( i_val == 3 ) p_context->skip_idct = AVDISCARD_NONKEY;

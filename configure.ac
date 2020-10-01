@@ -2714,6 +2714,16 @@ AS_IF([test "${enable_vpx}" != "no"],[
 ])
 
 dnl
+dnl libth266dec decoder plugin
+dnl
+AC_CHECK_LIB(th266dec,TH266DecCreateDecoder,[
+  LIBTH266DEC="-lth266dec"
+], [
+  LIBTH266DEC=""
+])
+AC_SUBST(LIBTH266DEC)
+
+dnl
 dnl twolame encoder plugin
 dnl
 PKG_ENABLE_MODULES_VLC([TWOLAME], [], [twolame], [MPEG Audio Layer 2 encoder], [auto], [], [], [ -DLIBTWOLAME_STATIC])
