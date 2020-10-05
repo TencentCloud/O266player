@@ -445,6 +445,13 @@ int avformat_OpenDemux( vlc_object_t *p_this )
             psz_type = "video";
 
             AVRational rate;
+            const float fps = var_InheritFloat( p_demux, "avformat-fps" );
+            if( fps ) {
+                rate = av_d2q( fps, INT_MAX );
+                msg_Info( p_demux, "setting fps to %d/%d", rate.num, rate.den );
+            }
+            else
+            {
 #if (LIBAVUTIL_VERSION_MICRO < 100) /* libav */
 # if (LIBAVFORMAT_VERSION_INT >= AV_VERSION_INT(55, 20, 0))
             rate.num = s->time_base.num;
@@ -457,6 +464,7 @@ int avformat_OpenDemux( vlc_object_t *p_this )
 #else /* ffmpeg */
             rate = av_guess_frame_rate( p_sys->ic, s, NULL );
 #endif
+            }
             if( rate.den && rate.num )
             {
                 es_fmt.video.i_frame_rate = rate.num;
@@ -813,6 +821,9 @@ static int Demux( demux_t *p_demux )
     else
         i_start_time = 0;
 
+    const float fps = var_InheritFloat( p_demux, "avformat-fps" );
+    const AVRational speed = fps ? av_mul_q(av_d2q( fps, INT_MAX ), (AVRational){1, 30}) : (AVRational){1, 1};
+
     if( pkt.dts == (int64_t)AV_NOPTS_VALUE )
         p_frame->i_dts = VLC_TS_INVALID;
     else
@@ -820,8 +831,8 @@ static int Demux( demux_t *p_demux )
         q = lldiv( pkt.dts, p_stream->time_base.den );
         p_frame->i_dts = q.quot * CLOCK_FREQ *
             p_stream->time_base.num + q.rem * CLOCK_FREQ *
-            p_stream->time_base.num /
-            p_stream->time_base.den - i_start_time + VLC_TS_0;
+            p_stream->time_base.num * speed.den /
+            ( p_stream->time_base.den * speed.num ) - i_start_time + VLC_TS_0;
     }
 
     if( pkt.pts == (int64_t)AV_NOPTS_VALUE )
@@ -831,13 +842,13 @@ static int Demux( demux_t *p_demux )
         q = lldiv( pkt.pts, p_stream->time_base.den );
         p_frame->i_pts = q.quot * CLOCK_FREQ *
             p_stream->time_base.num + q.rem * CLOCK_FREQ *
-            p_stream->time_base.num /
-            p_stream->time_base.den - i_start_time + VLC_TS_0;
+            p_stream->time_base.num * speed.den /
+            ( p_stream->time_base.den * speed.num ) - i_start_time + VLC_TS_0;
     }
     if( pkt.duration > 0 && p_frame->i_length <= 0 )
         p_frame->i_length = pkt.duration * CLOCK_FREQ *
-            p_stream->time_base.num /
-            p_stream->time_base.den;
+            p_stream->time_base.num * speed.den /
+            ( p_stream->time_base.den * speed.num );
 
     /* Add here notoriously bugged file formats/samples */
     if( !strcmp( p_sys->fmt->name, "flv" ) )

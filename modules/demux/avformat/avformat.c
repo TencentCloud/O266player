@@ -46,6 +46,7 @@ vlc_module_begin ()
     add_string( "avformat-format", NULL, FORMAT_TEXT, FORMAT_LONGTEXT, true )
     add_obsolete_string("ffmpeg-format") /* removed since 2.1.0 */
     add_string( "avformat-options", NULL, AV_OPTIONS_TEXT, AV_OPTIONS_LONGTEXT, true )
+    add_float( "avformat-fps", 0, N_("Frame rate"), N_("Frame rate"), false )
 
 #ifdef ENABLE_SOUT
     /* mux submodule */

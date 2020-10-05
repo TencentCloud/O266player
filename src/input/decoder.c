@@ -505,6 +505,7 @@ static int vout_update_format( decoder_t *p_dec )
         unsigned dpb_size;
         switch( p_dec->fmt_in.i_codec )
         {
+        case VLC_CODEC_VVC:
         case VLC_CODEC_HEVC:
         case VLC_CODEC_H264:
         case VLC_CODEC_DIRAC: /* FIXME valid ? */
