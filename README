@@ -12,6 +12,26 @@ The VideoLAN project was started at the university École Centrale Paris who
 relicensed VLC under the GPLv2 license in February 2001. Since then, VLC has
 been downloaded close to one billion times.
 
+Build and playback instructions for VLC with Tencent H.266 plugin (0.0.1)
+=========================================================================
+Please install th266dec in '/usr/local' directory. This is the default if it is build from source (on macOS).
+
+Build commands for macOS:
+mkdir build
+cd build
+JDK_HOME="" ../extras/package/macosx/build.sh -c -j 4
+
+This build commands have been tested on macOS 10.15.6, Xcode version 11.6 (11E708).
+More information can be found at https://wiki.videolan.org/MacOSCompile.
+Build on other platforms may be possible but has not been tested.
+
+Note:
+The build process will download and build the dependencies from source, which takes a long time.
+
+Play raw VVC video stream on macOS:
+For example, the input is input.bin at 50fps.
+./build/bin/vlc-osx-static input.bin --rate=4 --no-drop-late-frames --avformat-fps=50
+
 Links:
 ======
 
