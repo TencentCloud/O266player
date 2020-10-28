@@ -12,8 +12,18 @@ The VideoLAN project was started at the university École Centrale Paris who
 relicensed VLC under the GPLv2 license in February 2001. Since then, VLC has
 been downloaded close to one billion times.
 
-Build and playback instructions for VLC with Tencent H.266 plugin (0.0.1)
+Tencent H.266 plugin (0.0.1)
 =========================================================================
+
+Tencent H.266 plugin is a plugin for VLC player that enables VLC to play H.266
+Annex B bit streams.
+
+Reference:
+"Performance of a VVC software decoder," B. Zhu, S. Liu, X. Xu, X. Zhang, C. Gu, L. Wang, W. Feng, JVET-T0095
+
+
+Build instructions (macOS):
+
 Please install th266dec in '/usr/local' directory. This is the default if it is build from source (on macOS).
 
 Build commands for macOS:
@@ -30,7 +40,7 @@ The build process will download and build the dependencies from source, which ta
 
 Play raw VVC video stream on macOS:
 For example, the input is input.bin at 50fps.
-./build/bin/vlc-osx-static input.bin --rate=4 --no-drop-late-frames --avformat-fps=50
+./build/bin/vlc-osx-static input.bin --no-drop-late-frames --avformat-fps=50
 
 Links:
 ======
