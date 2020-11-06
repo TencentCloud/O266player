@@ -12,10 +12,10 @@ The VideoLAN project was started at the university École Centrale Paris who
 relicensed VLC under the GPLv2 license in February 2001. Since then, VLC has
 been downloaded close to one billion times.
 
-Tencent H.266 plugin (0.0.1)
+Tencent O266dec plugin (0.0.1)
 =========================================================================
 
-Tencent H.266 plugin is a plugin for VLC player that enables VLC to play H.266
+Tencent O266dec plugin is a plugin for VLC player that enables VLC to play H.266
 Annex B bit streams.
 
 Reference:
