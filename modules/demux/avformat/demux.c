@@ -830,7 +830,7 @@ static int Demux( demux_t *p_demux )
     {
         q = lldiv( pkt.dts, p_stream->time_base.den );
         p_frame->i_dts = q.quot * CLOCK_FREQ *
-            p_stream->time_base.num + q.rem * CLOCK_FREQ *
+            p_stream->time_base.num * speed.den / speed.num + q.rem * CLOCK_FREQ *
             p_stream->time_base.num * speed.den /
             ( p_stream->time_base.den * speed.num ) - i_start_time + VLC_TS_0;
     }
@@ -841,7 +841,7 @@ static int Demux( demux_t *p_demux )
     {
         q = lldiv( pkt.pts, p_stream->time_base.den );
         p_frame->i_pts = q.quot * CLOCK_FREQ *
-            p_stream->time_base.num + q.rem * CLOCK_FREQ *
+            p_stream->time_base.num * speed.den / speed.num + q.rem * CLOCK_FREQ *
             p_stream->time_base.num * speed.den /
             ( p_stream->time_base.den * speed.num ) - i_start_time + VLC_TS_0;
     }
