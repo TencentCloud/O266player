@@ -2714,14 +2714,14 @@ AS_IF([test "${enable_vpx}" != "no"],[
 ])
 
 dnl
-dnl libth266dec decoder plugin
+dnl libo266dec decoder plugin
 dnl
-AC_CHECK_LIB(th266dec,TH266DecCreateDecoder,[
-  LIBTH266DEC="-lth266dec"
+AC_CHECK_LIB(o266dec,O266DecCreateDecoder,[
+  LIBO266DEC="-lo266dec"
 ], [
-  LIBTH266DEC=""
+  LIBO266DEC=""
 ])
-AC_SUBST(LIBTH266DEC)
+AC_SUBST(LIBO266DEC)
 
 dnl
 dnl twolame encoder plugin

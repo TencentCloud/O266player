@@ -1,51 +1,51 @@
 diff --git a/configure b/configure
-index 20c55657ad..693b2c6569 100755
+index 20c55657ad..bfd0a4b356 100755
 --- a/configure
 +++ b/configure
-@@ -258,6 +258,7 @@ External library support:
-   --enable-libspeex        enable Speex de/encoding via libspeex [no]
-   --enable-libssh          enable SFTP protocol via libssh [no]
-   --enable-libtesseract    enable Tesseract, needed for ocr filter [no]
-+  --enable-libth266dec     enable VVC decoding via libth266dec [no]
-   --enable-libtheora       enable Theora encoding via libtheora [no]
-   --enable-libtwolame      enable MP2 encoding via libtwolame [no]
-   --enable-libv4l2         enable libv4l2/v4l-utils [no]
-@@ -1623,6 +1624,7 @@ EXTERNAL_LIBRARY_LIST="
-     libspeex
-     libssh
-     libtesseract
-+    libth266dec
-     libtheora
-     libtwolame
-     libv4l2
-@@ -2963,6 +2965,7 @@ libshine_encoder_select="audio_frame_queue"
- libspeex_decoder_deps="libspeex"
- libspeex_encoder_deps="libspeex"
- libspeex_encoder_select="audio_frame_queue"
-+libth266_decoder_deps="libth266dec"
- libtheora_encoder_deps="libtheora"
- libtwolame_encoder_deps="libtwolame"
- libvo_amrwbenc_encoder_deps="libvo_amrwbenc"
-@@ -5893,6 +5896,7 @@ enabled libsoxr           && require libsoxr soxr.h soxr_create -lsoxr
- enabled libssh            && require_pkg_config libssh libssh libssh/sftp.h sftp_init
- enabled libspeex          && require_pkg_config libspeex speex speex/speex.h speex_decoder_init
- enabled libtesseract      && require_pkg_config libtesseract tesseract tesseract/capi.h TessBaseAPICreate
-+enabled libth266dec       && require_pkg_config libth266dec "th266dec >= 0.1.0" th266dec_api.h TH266DecCreateDecoder $libm_extralibs $pthreads_extralibs
- enabled libtheora         && require libtheora theora/theoraenc.h th_info_init -ltheoraenc -ltheoradec -logg
- enabled libtwolame        && require libtwolame twolame.h twolame_init -ltwolame &&
-                              { check_lib libtwolame twolame.h twolame_encode_buffer_float32_interleaved -ltwolame ||
+@@ -240,6 +240,7 @@ External library support:
+   --enable-libkvazaar      enable HEVC encoding via libkvazaar [no]
+   --enable-libmodplug      enable ModPlug via libmodplug [no]
+   --enable-libmp3lame      enable MP3 encoding via libmp3lame [no]
++  --enable-libo266dec      enable VVC decoding via libo266dec [no]
+   --enable-libopencore-amrnb enable AMR-NB de/encoding via libopencore-amrnb [no]
+   --enable-libopencore-amrwb enable AMR-WB decoding via libopencore-amrwb [no]
+   --enable-libopencv       enable video filtering via libopencv [no]
+@@ -1608,6 +1609,7 @@ EXTERNAL_LIBRARY_LIST="
+     libmodplug
+     libmp3lame
+     libmysofa
++    libo266dec
+     libopencv
+     libopenh264
+     libopenjpeg
+@@ -2944,6 +2946,7 @@ libkvazaar_encoder_deps="libkvazaar"
+ libmodplug_demuxer_deps="libmodplug"
+ libmp3lame_encoder_deps="libmp3lame"
+ libmp3lame_encoder_select="audio_frame_queue mpegaudioheader"
++libo266_decoder_deps="libo266dec"
+ libopencore_amrnb_decoder_deps="libopencore_amrnb"
+ libopencore_amrnb_encoder_deps="libopencore_amrnb"
+ libopencore_amrnb_encoder_select="audio_frame_queue"
+@@ -5863,6 +5866,7 @@ enabled libmysofa         && require libmysofa "mysofa.h" mysofa_load -lmysofa $
+ enabled libnpp            && { check_lib libnpp npp.h nppGetLibVersion -lnppig -lnppicc -lnppc ||
+                                check_lib libnpp npp.h nppGetLibVersion -lnppi -lnppc ||
+                                die "ERROR: libnpp not found"; }
++enabled libo266dec        && require_pkg_config libo266dec "o266dec >= 0.1.0" o266dec_api.h O266DecCreateDecoder $libm_extralibs $pthreads_extralibs
+ enabled libopencore_amrnb && require libopencore_amrnb opencore-amrnb/interf_dec.h Decoder_Interface_init -lopencore-amrnb
+ enabled libopencore_amrwb && require libopencore_amrwb opencore-amrwb/dec_if.h D_IF_init -lopencore-amrwb
+ enabled libopencv         && { check_header opencv2/core/core_c.h &&
 diff --git a/libavcodec/Makefile b/libavcodec/Makefile
-index ca72138c02..8ffea8f755 100644
+index ca72138c02..cb6f2098ba 100644
 --- a/libavcodec/Makefile
 +++ b/libavcodec/Makefile
-@@ -951,6 +951,7 @@ OBJS-$(CONFIG_LIBOPUS_ENCODER)            += libopusenc.o libopus.o     \
- OBJS-$(CONFIG_LIBSHINE_ENCODER)           += libshine.o
- OBJS-$(CONFIG_LIBSPEEX_DECODER)           += libspeexdec.o
- OBJS-$(CONFIG_LIBSPEEX_ENCODER)           += libspeexenc.o
-+OBJS-$(CONFIG_LIBTH266_DECODER)           += libth266dec.o
- OBJS-$(CONFIG_LIBTHEORA_ENCODER)          += libtheoraenc.o
- OBJS-$(CONFIG_LIBTWOLAME_ENCODER)         += libtwolame.o
- OBJS-$(CONFIG_LIBVO_AMRWBENC_ENCODER)     += libvo-amrwbenc.o
+@@ -937,6 +937,7 @@ OBJS-$(CONFIG_LIBILBC_DECODER)            += libilbc.o
+ OBJS-$(CONFIG_LIBILBC_ENCODER)            += libilbc.o
+ OBJS-$(CONFIG_LIBKVAZAAR_ENCODER)         += libkvazaar.o
+ OBJS-$(CONFIG_LIBMP3LAME_ENCODER)         += libmp3lame.o
++OBJS-$(CONFIG_LIBO266_DECODER)            += libo266dec.o
+ OBJS-$(CONFIG_LIBOPENCORE_AMRNB_DECODER)  += libopencore-amr.o
+ OBJS-$(CONFIG_LIBOPENCORE_AMRNB_ENCODER)  += libopencore-amr.o
+ OBJS-$(CONFIG_LIBOPENCORE_AMRWB_DECODER)  += libopencore-amr.o
 @@ -1017,6 +1018,7 @@ OBJS-$(CONFIG_VC1_PARSER)              += vc1_parser.o vc1.o vc1data.o  \
  OBJS-$(CONFIG_VP3_PARSER)              += vp3_parser.o
  OBJS-$(CONFIG_VP8_PARSER)              += vp8_parser.o
@@ -55,14 +55,14 @@ index ca72138c02..8ffea8f755 100644
  
  # bitstream filters
 diff --git a/libavcodec/allcodecs.c b/libavcodec/allcodecs.c
-index ed1e7ab06e..0d317e3888 100644
+index ed1e7ab06e..c6f73c4d85 100644
 --- a/libavcodec/allcodecs.c
 +++ b/libavcodec/allcodecs.c
 @@ -598,6 +598,7 @@ static void register_all(void)
      REGISTER_ENCODER(HEVC_VAAPI,        hevc_vaapi);
      REGISTER_ENCODER(HEVC_VIDEOTOOLBOX, hevc_videotoolbox);
      REGISTER_ENCODER(LIBKVAZAAR,        libkvazaar);
-+    REGISTER_DECODER(LIBTH266,          libth266);
++    REGISTER_DECODER(LIBO266,           libo266);
      REGISTER_DECODER(MJPEG_CUVID,       mjpeg_cuvid);
      REGISTER_ENCODER(MJPEG_QSV,         mjpeg_qsv);
      REGISTER_ENCODER(MJPEG_VAAPI,       mjpeg_vaapi);
@@ -220,12 +220,12 @@ index e6c40381b0..5d10ebcd85 100644
          if (ret <= 0 || nal->size <= 0) {
              if (ret < 0) {
                  av_log(logctx, AV_LOG_ERROR, "Invalid NAL unit %d, skipping.\n",
-diff --git a/libavcodec/libth266dec.c b/libavcodec/libth266dec.c
+diff --git a/libavcodec/libo266dec.c b/libavcodec/libo266dec.c
 new file mode 100644
-index 0000000000..2dc1059a87
+index 0000000000..8f01e3fabb
 --- /dev/null
-+++ b/libavcodec/libth266dec.c
-@@ -0,0 +1,207 @@
++++ b/libavcodec/libo266dec.c
+@@ -0,0 +1,185 @@
 +/*
 + * Tencent VVC decoder library plugin
 + *
@@ -246,7 +246,7 @@ index 0000000000..2dc1059a87
 + * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 + */
 +
-+#include <th266dec_api.h>
++#include <o266dec_api.h>
 +
 +#include "avcodec.h"
 +#include "internal.h"
@@ -255,26 +255,26 @@ index 0000000000..2dc1059a87
 +#include "libavutil/opt.h"
 +#include "profiles.h"
 +
-+#define OFFSET(x) offsetof(TH266DecContext, x)
++#define OFFSET(x) offsetof(O266DecContext, x)
 +#define VD AV_OPT_FLAG_VIDEO_PARAM | AV_OPT_FLAG_DECODING_PARAM
 +
-+typedef struct TH266DecContext {
++typedef struct O266DecContext {
 +    AVClass *class;
-+    TH266DecConfig config;
-+    TH266DecDecoderHandle handle;
++    O266DecConfig config;
++    O266DecDecoderHandle handle;
 +    bool eos;
-+} TH266DecContext;
++} O266DecContext;
 +
-+static av_cold int th266dec_init(AVCodecContext *avctx)
++static av_cold int o266dec_init(AVCodecContext *avctx)
 +{
-+    TH266DecContext *ctx = avctx->priv_data;
-+    memset(&ctx->config, 0, sizeof(TH266DecConfig));
++    O266DecContext *ctx = avctx->priv_data;
++    memset(&ctx->config, 0, sizeof(O266DecConfig));
 +    ctx->config.num_threads = FFMIN(avctx->thread_count ? avctx->thread_count : av_cpu_count(), 64);
 +    if (ctx->config.num_threads > 0) {
 +        ctx->config.enable_multi_thread = 1;
 +    }
 +    ctx->eos = false;
-+    if (kTH266DecOk != TH266DecCreateDecoder(&ctx->config, &ctx->handle)) {
++    if (kO266DecOk != O266DecCreateDecoder(&ctx->config, &ctx->handle)) {
 +        av_log(avctx, AV_LOG_ERROR, "Failed to initialize decoder\n");
 +        return AVERROR(EINVAL);
 +    }
@@ -282,11 +282,11 @@ index 0000000000..2dc1059a87
 +    return 0;
 +}
 +
-+static int th266dec_decode(AVCodecContext *avctx, void *data, int *got_frame, AVPacket *avpkt) {
-+    TH266DecContext *ctx = avctx->priv_data;
++static int o266dec_decode(AVCodecContext *avctx, void *data, int *got_frame, AVPacket *avpkt) {
++    O266DecContext *ctx = avctx->priv_data;
 +    AVFrame *picture = data;
-+    TH266DecStatus status = kTH266DecOk;
-+    TH266DecOutputPicture pic;
++    O266DecStatus status = kO266DecOk;
++    O266DecOutputPicture pic;
 +    uint8_t *planes[3];
 +    int linesizes[3];
 +    int ret;
@@ -294,27 +294,27 @@ index 0000000000..2dc1059a87
 +
 +    if (!avpkt->data) {
 +        if (!ctx->eos) {
-+            TH266DecNotifyEndOfStream(ctx->handle);
-+            status = TH266DecDecodeFrame(ctx->handle);
-+            if (status != kTH266DecEndOfStream) {
++            O266DecNotifyEndOfStream(ctx->handle);
++            status = O266DecDecodeFrame(ctx->handle);
++            if (status != kO266DecEndOfStream) {
 +                av_log(avctx, AV_LOG_ERROR, "Failed to flush decoder, status %d\n", status);
 +                return AVERROR(EINVAL);
 +            }
 +            ctx->eos = true;
 +        }
 +    } else {
-+        TH266DecDataPacket packet;
++        O266DecDataPacket packet;
 +        packet.has_complete_nal = true;
 +        packet.data_buf = avpkt->data;
 +        packet.data_size = avpkt->size;
-+        status = TH266DecPushData(ctx->handle, &packet);
-+        if (status != kTH266DecOk) {
++        status = O266DecPushData(ctx->handle, &packet);
++        if (status != kO266DecOk) {
 +            av_log(avctx, AV_LOG_ERROR, "Failed to push data\n");
 +            return AVERROR(EINVAL);
 +        }
-+        status = TH266DecDecodeFrame(ctx->handle);
-+        if (status != kTH266DecOk) {
-+            if (status == kTH266DecNeedMoreData) {
++        status = O266DecDecodeFrame(ctx->handle);
++        if (status != kO266DecOk) {
++            if (status == kO266DecNeedMoreData) {
 +                return AVERROR(EAGAIN);
 +            }
 +            av_log(avctx, AV_LOG_ERROR, "Failed to decode data, status %d\n", status);
@@ -322,19 +322,19 @@ index 0000000000..2dc1059a87
 +        }
 +    }
 +
-+    status = TH266DecGetOutputPicture(ctx->handle, &pic);
-+    if (status == kTH266DecOk) {
++    status = O266DecGetOutputPicture(ctx->handle, &pic);
++    if (status == kO266DecOk) {
 +        switch (pic.header.chroma_format) {
-+        case kTH266DecChromaFormat400:
++        case kO266DecChromaFormat400:
 +            avctx->pix_fmt = pic.planes[0].bit_depth == 8 ? AV_PIX_FMT_GRAY8 : AV_PIX_FMT_GRAY10;
 +            break;
-+        case kTH266DecChromaFormat420:
++        case kO266DecChromaFormat420:
 +            avctx->pix_fmt = pic.planes[0].bit_depth == 8 ? AV_PIX_FMT_YUV420P : AV_PIX_FMT_YUV420P10;
 +            break;
-+        case kTH266DecChromaFormat422:
++        case kO266DecChromaFormat422:
 +            avctx->pix_fmt = pic.planes[0].bit_depth == 8 ? AV_PIX_FMT_YUV422P : AV_PIX_FMT_YUV422P10;
 +            break;
-+        case kTH266DecChromaFormat444:
++        case kO266DecChromaFormat444:
 +            avctx->pix_fmt = pic.planes[0].bit_depth == 8 ? AV_PIX_FMT_YUV444P : AV_PIX_FMT_YUV444P10;
 +            break;
 +        default:
@@ -360,66 +360,44 @@ index 0000000000..2dc1059a87
 +        linesizes[0] = (int)pic.planes[0].stride;
 +        linesizes[1] = (int)pic.planes[1].stride;
 +        linesizes[2] = (int)pic.planes[2].stride;
-+#if TH266DEC_FIX_8BIT_OUTPUT
-+        if (pic.planes[0].bit_depth == 8) {
-+            int width = pic.header.width;
-+            int height = pic.header.height;
-+            const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(avctx->pix_fmt);
-+            for (int i = 0; i < desc->nb_components; i++) {
-+                if (i == 1) {
-+                    width = AV_CEIL_RSHIFT(width, desc->log2_chroma_w);
-+                    height = AV_CEIL_RSHIFT(height, desc->log2_chroma_h);
-+                }
-+                const uint8_t *src = planes[i];
-+                uint8_t *dst = picture->data[i];
-+                for (int y = 0; y < height; y++) {
-+                    for (int x = 0; x < width; x++) {
-+                        dst[x] = src[x * 2];
-+                    }
-+                    src += linesizes[i];
-+                    dst += picture->linesize[i];
-+                }
-+            }
-+        } else
-+#endif
 +        av_image_copy(picture->data, picture->linesize, (const uint8_t **)planes, linesizes, avctx->pix_fmt, avctx->width, avctx->height);
-+        TH266DecReleaseOutputPicture(ctx->handle, &pic);
++        O266DecReleaseOutputPicture(ctx->handle, &pic);
 +        *got_frame = 1;
 +    }
 +    return avpkt->size;
 +}
 +
-+static av_cold int th266dec_free(AVCodecContext *avctx)
++static av_cold int o266dec_free(AVCodecContext *avctx)
 +{
-+    TH266DecContext *ctx = avctx->priv_data;
++    O266DecContext *ctx = avctx->priv_data;
 +    if (ctx && ctx->handle) {
-+        TH266DecCloseDecoder(ctx->handle);
++        O266DecCloseDecoder(ctx->handle);
 +        ctx->handle = NULL;
 +    }
 +    return 0;
 +}
 +
-+static const AVOption th266_options[] = {
++static const AVOption o266_options[] = {
 +    {NULL}
 +};
 +
-+static const AVClass class_th266 = {
-+    .class_name = "libth266dec decoder",
++static const AVClass class_o266 = {
++    .class_name = "libo266dec decoder",
 +    .item_name = av_default_item_name,
-+    .option = th266_options,
++    .option = o266_options,
 +    .version = LIBAVUTIL_VERSION_INT,
 +};
 +
-+AVCodec ff_libth266_decoder = {
-+    .name = "libth266dec",
++AVCodec ff_libo266_decoder = {
++    .name = "libo266dec",
 +    .long_name = NULL_IF_CONFIG_SMALL("Tencent VVC decoder"),
 +    .type = AVMEDIA_TYPE_VIDEO,
 +    .id = AV_CODEC_ID_VVC,
-+    .priv_data_size = sizeof(TH266DecContext),
-+    .priv_class = &class_th266,
-+    .init = th266dec_init,
-+    .close = th266dec_free,
-+    .decode = th266dec_decode,
++    .priv_data_size = sizeof(O266DecContext),
++    .priv_class = &class_o266,
++    .init = o266dec_init,
++    .close = o266dec_free,
++    .decode = o266dec_decode,
 +    .capabilities = AV_CODEC_CAP_AUTO_THREADS | AV_CODEC_CAP_DR1 | AV_CODEC_CAP_DELAY,
 +    .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_INIT_CLEANUP,
 +    .profiles = NULL_IF_CONFIG_SMALL(ff_vvc_profiles),
