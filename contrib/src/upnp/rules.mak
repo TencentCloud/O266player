@@ -3,7 +3,9 @@ UPNP_VERSION := 1.6.19
 UPNP_URL := $(SF)/pupnp/libupnp-$(UPNP_VERSION).tar.bz2
 
 ifdef BUILD_NETWORK
+ifndef HAVE_MINGW_W64
 PKGS += upnp
+endif
 endif
 ifeq ($(call need_pkg,"libupnp >= 1.6.18"),)
 PKGS_FOUND += upnp

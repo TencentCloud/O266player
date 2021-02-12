@@ -3,7 +3,9 @@
 ZVBI_VERSION := 0.2.35
 ZVBI_URL := $(SF)/zapping/zvbi-$(ZVBI_VERSION).tar.bz2
 
+ifndef HAVE_MINGW_W64
 PKGS += zvbi
+endif
 ifeq ($(call need_pkg,"zvbi-0.2"),)
 PKGS_FOUND += zvbi
 endif

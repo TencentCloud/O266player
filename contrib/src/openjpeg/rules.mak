@@ -6,9 +6,11 @@ OPENJPEG_URL := https://github.com/uclouvain/openjpeg/archive/v$(OPENJPEG_VERSIO
 OPENJPEG_CFLAGS   := $(CFLAGS)
 OPENJPEG_CXXFLAGS := $(CXXFLAGS)
 ifdef HAVE_WIN32
+ifndef HAVE_MINGW_W64
 DEPS_openjpeg += pthreads $(DEPS_pthreads)
 OPENJPEG_CFLAGS   += -DPTW32_STATIC_LIB
 OPENJPEG_CXXFLAGS += -DPTW32_STATIC_LIB
+endif
 endif
 
 $(TARBALLS)/openjpeg-v$(OPENJPEG_VERSION).tar.gz:

@@ -13,9 +13,11 @@ MYSOFA_CFLAGS   := $(CFLAGS)
 MYSOFA_CXXFLAGS := $(CXXFLAGS)
 DEPS_mysofa += zlib $(DEPS_zlib)
 ifdef HAVE_WIN32
+ifndef HAVE_MINGW_W64
 DEPS_mysofa += pthreads $(DEPS_pthreads)
 MYSOFA_CFLAGS   += -DPTW32_STATIC_LIB
 MYSOFA_CXXFLAGS += -DPTW32_STATIC_LIB
+endif
 endif
 
 $(TARBALLS)/libmysofa-$(MYSOFA_VERSION).tar.gz:

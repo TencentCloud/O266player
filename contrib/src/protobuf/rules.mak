@@ -16,9 +16,11 @@ PROTOBUF_CFLAGS   := $(CFLAGS)
 PROTOBUF_CXXFLAGS := $(CXXFLAGS)
 DEPS_protobuf = zlib $(DEPS_zlib)
 ifdef HAVE_WIN32
+ifndef HAVE_MINGW_W64
 DEPS_protobuf += pthreads $(DEPS_pthreads)
 PROTOBUF_CFLAGS   += -DPTW32_STATIC_LIB
 PROTOBUF_CXXFLAGS += -DPTW32_STATIC_LIB
+endif
 endif
 
 protobuf: protobuf-$(PROTOBUF_VERSION)-cpp.tar.gz .sum-protobuf
