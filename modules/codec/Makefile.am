@@ -381,8 +381,15 @@ if ENABLE_SOUT
 libavcodec_plugin_la_SOURCES += codec/avcodec/encoder.c
 endif
 libavcodec_plugin_la_CFLAGS = $(AVCODEC_CFLAGS) $(AM_CFLAGS)
-libavcodec_plugin_la_LIBADD = $(AVCODEC_LIBS) $(LIBM) $(LIBO266DEC) libavcodec_common.la
-libavcodec_plugin_la_LDFLAGS = $(AM_LDFLAGS) $(SYMBOLIC_LDFLAGS)
+libavcodec_plugin_la_LIBADD = $(AVCODEC_LIBS) $(LIBM) libavcodec_common.la
+libavcodec_plugin_la_LDFLAGS = $(AM_LDFLAGS_NOSTATIC) $(SYMBOLIC_LDFLAGS)
+if HAVE_WIN32
+libavcodec_plugin_la_LDFLAGS += -Wl,-Bdynamic
+endif
+libavcodec_plugin_la_LDFLAGS += $(O266DEC_LIBS)
+if HAVE_WIN32
+libavcodec_plugin_la_LDFLAGS += -Wl,-Bstatic
+endif
 
 if MERGE_FFMPEG
 libavcodec_plugin_la_SOURCES += demux/avformat/demux.c access/avio.c packetizer/avparser.c

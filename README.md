@@ -1,8 +1,8 @@
 Tencent O266dec decoder library (0.0.1)
 =========================================================================
 
-Tencent Media Lab has developed a high performance CPU-efficient
-H.266/VVC decoder library (O266dec) that can be integrated into player and
+Tencent Media Lab's O266 decoder is a high performance CPU-efficient
+H.266/VVC decoder library (O266dec) designed to be integrated into player and
 transcoding applications. The decoder library can be used to play back
 H.266 Annex B bitstreams and is available to try on your target
 platforms using the modified VLC player available at our Github page
@@ -51,7 +51,7 @@ Build commands for macOS:
 ```
 mkdir build
 cd build
-JDK_HOME="" ../extras/package/macosx/build.sh -c -j 4
+JDK_HOME="" PKG_CONFIG_LIBDIR="/usr/local/lib/pkgconfig:$PWD/../extras/tools/build/lib/pkgconfig" ../extras/package/macosx/build.sh -c -j 4
 ```
 
 This build commands have been tested on macOS 10.15.6, Xcode version 11.6 (11E708).

@@ -2716,12 +2716,9 @@ AS_IF([test "${enable_vpx}" != "no"],[
 dnl
 dnl libo266dec decoder plugin
 dnl
-AC_CHECK_LIB(o266dec,O266DecCreateDecoder,[
-  LIBO266DEC="-lo266dec"
-], [
-  LIBO266DEC=""
+PKG_CHECK_MODULES([O266DEC], [o266dec >= 0.1.0], [], [
+  AC_MSG_ERROR([libo266dec 0.1.0 or higher was not found])
 ])
-AC_SUBST(LIBO266DEC)
 
 dnl
 dnl twolame encoder plugin

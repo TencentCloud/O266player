@@ -47,12 +47,15 @@ RUN cd /O266player/contrib/win32 \
   && rm -f ../i686-w64-mingw32/bin/moc ../i686-w64-mingw32/bin/uic ../i686-w64-mingw32/bin/rcc \
   && ln -sf x86_64-w64-mingw32 ../i686-w64-mingw32
 
+# avoid static linking to libssp
+RUN rm /usr/lib/gcc/x86_64-w64-mingw32/*-posix/libssp.dll.a
+
 # bootstrap and configure player
 RUN cd /O266player \
   && ./bootstrap \
   && mkdir win32 \
   && cd win32 \
-  && PKG_CONFIG_LIBDIR=/O266player/contrib/x86_64-w64-mingw32/lib/pkgconfig ../extras/package/win32/configure.sh --host=x86_64-w64-mingw32 --build=x86_64-pc-linux-gnu
+  && PKG_CONFIG_LIBDIR=/usr/local/lib/pkgconfig:/O266player/contrib/x86_64-w64-mingw32/lib/pkgconfig ../extras/package/win32/configure.sh --host=x86_64-w64-mingw32 --build=x86_64-pc-linux-gnu
 
 # build player
 RUN cd /O266player/win32 \
@@ -61,4 +64,9 @@ RUN cd /O266player/win32 \
 # build package
 RUN ln -sf /usr/include/wine/wine/windows /usr/include/wine/windows \
   && cd /O266player/win32 \
-  && LIBVLC_CFLAGS=-I/O266player/win32/_win32/include LIBVLC_LIBS="-L/O266player/win32/_win32/lib -lvlc" make package-win32-zip -j`nproc`
+  && LIBVLC_CFLAGS=-I/O266player/win32/_win32/include LIBVLC_LIBS="-L/O266player/win32/_win32/lib -lvlc" make package-win-strip -j`nproc` \
+  && cp /usr/local/lib/libo266dec.dll vlc-*/ \
+  && cp /usr/lib/gcc/x86_64-w64-mingw32/*-posix/libgcc_s_seh-1.dll vlc-*/ \
+  && cp /usr/lib/gcc/x86_64-w64-mingw32/*-posix/libstdc++-6.dll vlc-*/ \
+  && cp /usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll vlc-*/ \
+  && make package-win32-zip
