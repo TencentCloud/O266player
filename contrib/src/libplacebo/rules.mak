@@ -13,7 +13,9 @@ LIBPLACEBO_CFLAGS   += -DPTW32_STATIC_LIB
 LIBPLACEBO_CXXFLAGS += -DPTW32_STATIC_LIB
 endif
 
+ifndef HAVE_MINGW_W64
 PKGS += libplacebo
+endif
 ifeq ($(call need_pkg,"libplacebo"),)
 PKGS_FOUND += libplacebo
 endif

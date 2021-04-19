@@ -4,7 +4,9 @@ SRT_VERSION := 1.2.3
 SRT_URL := $(GITHUB)/Haivision/srt/archive/v$(SRT_VERSION).tar.gz
 
 ifdef BUILD_NETWORK
+ifndef HAVE_MINGW_W64
 PKGS += srt
+endif
 endif
 
 ifeq ($(call need_pkg,"srt >= 1.2.2"),)

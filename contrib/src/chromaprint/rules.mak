@@ -21,6 +21,6 @@ chromaprint: chromaprint-$(CHROMAPRINT_VERSION).tar.gz .sum-chromaprint
 DEPS_chromaprint = ffmpeg $(DEPS_ffmpeg)
 
 .chromaprint: chromaprint .ffmpeg toolchain.cmake
-	cd $< && $(HOSTVARS_PIC) $(CMAKE)
+	cd $< && $(HOSTVARS_PIC) PKG_CONFIG_PATH=$(PREFIX)/lib/pkgconfig $(CMAKE)
 	cd $< && $(MAKE) install
 	touch $@

@@ -222,7 +222,7 @@ index e6c40381b0..5d10ebcd85 100644
                  av_log(logctx, AV_LOG_ERROR, "Invalid NAL unit %d, skipping.\n",
 diff --git a/libavcodec/libo266dec.c b/libavcodec/libo266dec.c
 new file mode 100644
-index 0000000000..8f01e3fabb
+index 0000000000..bd4417e62b
 --- /dev/null
 +++ b/libavcodec/libo266dec.c
 @@ -0,0 +1,185 @@
@@ -294,7 +294,7 @@ index 0000000000..8f01e3fabb
 +
 +    if (!avpkt->data) {
 +        if (!ctx->eos) {
-+            O266DecNotifyEndOfStream(ctx->handle);
++            O266DecNotifyFlush(ctx->handle, true);
 +            status = O266DecDecodeFrame(ctx->handle);
 +            if (status != kO266DecEndOfStream) {
 +                av_log(avctx, AV_LOG_ERROR, "Failed to flush decoder, status %d\n", status);
