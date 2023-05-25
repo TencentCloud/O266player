@@ -1203,7 +1203,7 @@ index 0000000000..df0c83bb9a
 +    sps->subpic_info_present_flag = get_bits1(gb);
 +    if (sps->subpic_info_present_flag) {
 +        sps->num_subpics = get_ue_golomb_long(gb) + 1;
-+        if (sps->num_subpics > 1) {
++        if (sps->num_subpics > 1 && sps->num_subpics < 600) {
 +            sps->independent_subpics_flag = get_bits1(gb);
 +            sps->subpic_same_size_flag = get_bits1(gb);
 +            const int log2_width = av_log2((sps->width + sps->ctu_size - 1) / sps->ctu_size);
