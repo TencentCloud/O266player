@@ -1229,7 +1229,7 @@ index 0000000000..df0c83bb9a
 +        sps->subpic_id_mapping_explicitly_signalled_flag = get_bits1(gb);
 +        if (sps->subpic_id_mapping_explicitly_signalled_flag) {
 +            sps->subpic_id_mapping_present_flag = get_bits1(gb);
-+            if (sps->subpic_id_mapping_present_flag) {
++            if (sps->subpic_id_mapping_present_flag && sps->num_subpics <= 600) {
 +                for (i = 0; i < sps->num_subpics; i++)
 +                    sps->subpic[i].id = get_bits(gb, sps->subpic_id_len);
 +            }
